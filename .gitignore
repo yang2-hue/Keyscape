@@ -1,0 +1,14 @@
+node_modules/
+dist/
+*.tsbuildinfo
+work/
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+
+# Keep the current prototype evidence; past visual explorations stay local.
+outputs/*
+!outputs/keyscape-prototype-*.png
+!outputs/verification.json

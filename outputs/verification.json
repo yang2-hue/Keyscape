@@ -1,0 +1,17 @@
+{
+  "result": "passed",
+  "errors": [],
+  "checks": [
+    "desktop WebGL render",
+    "rotate/zoom/reset",
+    "pause/resume",
+    "day/evening",
+    "reference dialog + Escape",
+    "two artwork navigation",
+    "invalid GLB fallback",
+    "valid off-centre GLB normalization",
+    "return to study",
+    "mobile layout",
+    "reduced motion"
+  ]
+}
