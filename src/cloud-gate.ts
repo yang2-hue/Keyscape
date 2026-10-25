@@ -114,7 +114,10 @@ export function createCloudGate(time:{value:number}){
       a*=smoothstep(0.0,.18,vUv.x)*(1.0-smoothstep(.82,1.0,vUv.x));
       gl_FragColor=vec4(uColor,a*uOpacity);
     }`});
-  const mistPlane=new THREE.Mesh(new THREE.PlaneGeometry(2.2,.55),mistMaterial);
+  // Registered like every other geometry so the gate can be disposed cleanly;
+  // an untracked PlaneGeometry here leaked one geometry per visit.
+  const mistGeometry=new THREE.PlaneGeometry(2.2,.55);geometries.add(mistGeometry);
+  const mistPlane=new THREE.Mesh(mistGeometry,mistMaterial);
   mistPlane.position.set(0,.16,-1.18);mistPlane.name='GateMist';root.add(mistPlane);
 
   // A shallow stream curls across the front sand, with foam dots.

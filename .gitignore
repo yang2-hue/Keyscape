@@ -20,3 +20,5 @@ outputs/*
 !outputs/gallery-verify-v09/
 !outputs/gallery-verify-v09/**
 outputs/gallery-verify-v09/*.png
+!outputs/memory-audit-v02/
+!outputs/memory-audit-v02/**

@@ -65,7 +65,7 @@ React、TypeScript、Vite、Three.js、React Three Fiber、Drei、@react-three/p
 - 生产包按库拆分为 `three`(705 kB) / `three-fiber`(426 kB) / `three-post`(89 kB) / 应用(154 kB)，`dist` 合计约 2.3 MB。three 单块仍 >500 kB，属库本体体积。
 - `pnpm verify` 13 项浏览器检查：三件程序化作品的深链、点击注波（`waveImpulses` +1）、播放／暂停的渲染回路（暂停后 2.5 s 内 0 帧）、暂停时冻结动画时间、暂停时昼夜过渡仍渲染、恢复播放、移动端 44 px 点击区与导航不溢出、无页面错误。
 - 检查环境是 Chrome / SwiftShader（约 3 fps），不能代表真实手机或硬件帧率。正式发布前需真机测试。
-- 月湾的艺术水准、真机性能、切换时的少量纹理残留（`outputs/memory-audit-v01`）仍未结案。
+- 月湾的艺术水准与真机性能仍未结案。作品切换不再逐次泄漏：首轮往返后纹理增量停在一次性的 +5（three.js 透射渲染目标，进蓝洞时建立），几何体持平；云门雾墙几何体未登记的泄漏已修，见 `outputs/memory-audit-v02/`。
 - Draco / KTX2 需额外解码器，当前不支持；程序化场景未导出为独立 GLB；项目仅在本地运行，未发布。
 
 历史生成资产与 SHA-256 记录保留在 `public/models/*/source.json`，二进制已归档到 `work/archive/`。对照依据见 `docs/reference-implementation-audit.md`。

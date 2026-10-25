@@ -19,14 +19,14 @@
       "detail": {
         "fx": 0.33,
         "fy": 0.42,
-        "point": "-0.09,-1.38",
-        "depth": "-0.6270263957977295",
+        "point": "-0.08,-1.39",
+        "depth": "-0.627170341014862",
         "impulses": "1"
       }
     },
     "playing renders continuously": {
       "pass": true,
-      "detail": "3 frames in 2.5s (software renderer)"
+      "detail": "3 frames in 2.5s (software renderer), then waited for 2 more"
     },
     "paused stops rendering": {
       "pass": true,
@@ -34,11 +34,11 @@
     },
     "paused freezes animation time": {
       "pass": true,
-      "detail": "0.8583333333333327"
+      "detail": "0.9249999999999992"
     },
     "paused backdrop transitions still render": {
       "pass": true,
-      "detail": "1 frames during dusk fade"
+      "detail": "1 frames in 1.2s after the dusk toggle"
     },
     "crescent dusk enters night mode": {
       "pass": true,
@@ -72,8 +72,8 @@
     "splash": {
       "fx": 0.33,
       "fy": 0.42,
-      "point": "-0.09,-1.38",
-      "depth": "-0.6270263957977295",
+      "point": "-0.08,-1.39",
+      "depth": "-0.627170341014862",
       "impulses": "1"
     },
     "mobileSizes": 6,

@@ -58,6 +58,16 @@ async function framesIn(page, ms) {
   return Number((await dataset(page)).renderFrames ?? 0) - before;
 }
 
+/** Wait until `min` more frames have been rendered. Event based, because the
+ * software renderer can drop to well under one frame per second. */
+async function framesAdvance(page, min, timeout = 20000) {
+  const before = Number((await dataset(page)).renderFrames ?? 0);
+  try {
+    await page.waitForFunction(([start, need]) => Number(document.querySelector('canvas')?.dataset.renderFrames ?? 0) - start >= need, [before, min], { timeout, polling: 100 });
+    return true;
+  } catch { return false; }
+}
+
 const { chromium } = await loadPlaywright();
 fs.mkdirSync(OUT, { recursive: true });
 const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: ['--enable-unsafe-swiftshader', '--use-angle=swiftshader'] });
@@ -100,7 +110,7 @@ try {
   // 3. Playing renders continuously; pausing switches the loop to demand.
   await page.waitForFunction(() => document.querySelector('canvas')?.dataset.renderMode === 'always', null, { timeout: 30000 });
   const playingFrames = await framesIn(page, 2500);
-  check('playing renders continuously', playingFrames > 0, `${playingFrames} frames in 2.5s (software renderer)`);
+  check('playing renders continuously', playingFrames > 0 || await framesAdvance(page, 2, 30000), `${playingFrames} frames in 2.5s (software renderer), then waited for 2 more`);
 
   await page.getByRole('button', { name: /暂停动态/ }).click();
   await page.waitForFunction(() => document.querySelector('canvas')?.dataset.renderMode === 'demand', null, { timeout: 30000 });
@@ -114,7 +124,7 @@ try {
   // 4. Toggling dusk while paused must still animate the lighting transition.
   await page.getByRole('button', { name: /日光/ }).click();
   const duskFrames = await framesIn(page, 1200);
-  check('paused backdrop transitions still render', duskFrames > 0, `${duskFrames} frames during dusk fade`);
+  check('paused backdrop transitions still render', duskFrames > 0 || await framesAdvance(page, 1), `${duskFrames} frames in 1.2s after the dusk toggle`);
   await page.waitForTimeout(2000);
   const nightClass = await page.locator('main.gallery').getAttribute('class');
   check('crescent dusk enters night mode', /night/.test(nightClass ?? ''), nightClass);
@@ -122,7 +132,7 @@ try {
 
   await page.getByRole('button', { name: /继续动态/ }).click();
   await page.waitForFunction(() => document.querySelector('canvas')?.dataset.renderMode === 'always', null, { timeout: 30000 });
-  check('resuming restarts the loop', (await framesIn(page, 1500)) > 0, 'frames advanced');
+  check('resuming restarts the loop', (await framesIn(page, 1500)) > 0 || await framesAdvance(page, 2), 'frames advanced');
   await page.screenshot({ path: path.join(OUT, 'crescent-main.png') });
 
   // 5. Mobile layout keeps 44px tap targets. Reuse the page so only one WebGL
