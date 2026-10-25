@@ -66,6 +66,19 @@ art-v05 起默认入口改为分离构建的程序化场景：分离地形、礁
 
 用户要求把画面上的「月湾环抱」几个大字去掉。删掉 `<h1>`、`.art-caption` 区块与对应样式（含 `@keyframes arrive`），同时把原本为文字让位的舞台内边距改为居中（桌面 `2% 7% 8%`、移动端 `12% 0 22% 0`）。画面上现在只有作品本体、左上页标和底部控制条。验收改成反向断言：`h1/h2/.art-caption` 数量为 0，且页面文本里不含「月湾环抱」。
 
+## 02.12 · 界面整理（v14）
+
+参照 [VoltAgent/awesome-design-md](https://github.com/VoltAgent/awesome-design-md) 的 84 份品牌设计文档做了外壳整理，取舍记录在 `docs/design-system.md`。
+
+- **令牌化**：`style.css` 顶部建立 `:root`，8 条天气/夜间规则从"3 个渐变停靠点"收成 1 个 `--paper`；背景改用 `background-color` 真正 800ms 淡入，中心高光另置 `::before` 用 `opacity` 过渡（渐变本身不可插值，原来的 `transition:background` 其实是硬切）。
+- **控件簇**：删掉浮在画面右侧的 `.side-tools`，复位按钮移进页脚；暂停改为胶囊、复位改为 40px（触屏 44px）圆形，描边统一 hairline。
+- **状态**：按压 `scale(.95)`、悬停只换表面色（原来会 `translateY(-1px)`）、焦点环 2px/偏移 3px 且用唯一强调色；暂停状态从 `aria-pressed` 改为 `data-paused`（标签会变，按钮不该同时报告 pressed）。
+- **时刻刻度**：页脚中央五格刻度，当前一格拉长并在一个停留周期内填满，与停留计时同源（`run` 计数器保证切页回来时重新对齐）。
+- **可读性**：手势提示 9px → 11px；`--ink-muted` 调到 4.88:1（雨天 4.81:1）；新增 `prefers-contrast: more` / `prefers-reduced-transparency` 回退。
+- **清理**：删除 `weather-overcast` 的 5 条死规则、`.toast`、`.import-button`、`.side-tools`、`.mood-controls`、`.text-button`、`.night .night .loading` 双类名笔误。
+
+验收：`pnpm verify` 36 项（新增控件形状、按压回弹、焦点环、刻度数量与生效格、暂停状态语义），`tsc` 0 错误。
+
 ## 03 · 单件作品的深化
 
 月湾现在是唯一作品，后续打磨都在这一件上做：

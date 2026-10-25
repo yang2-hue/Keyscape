@@ -11,18 +11,67 @@
       "detail": [
         "✳",
         "当前浏览器不支持 3D 展示。",
-        "↺",
         "·",
         "·",
         "早上 · 晴天",
-        "Ⅱ 暂停动态"
+        "Ⅱ 暂停动态",
+        "↺"
       ]
     },
     "no import or zoom controls": {
       "pass": true
     },
-    "only the reset view stays in the side tools": {
+    "the frame carries two controls and nothing floats beside the artwork": {
       "pass": true
+    },
+    "controls use the pill and 40px icon shapes": {
+      "pass": true,
+      "detail": {
+        "pillRadius": "999px",
+        "pillHeight": 40,
+        "iconSize": 40,
+        "paused": "false",
+        "steps": 5,
+        "liveTicks": 1,
+        "fillAnimating": "sweep"
+      }
+    },
+    "the loop shows five ticks with exactly one live": {
+      "pass": true,
+      "detail": {
+        "pillRadius": "999px",
+        "pillHeight": 40,
+        "iconSize": 40,
+        "paused": "false",
+        "steps": 5,
+        "liveTicks": 1,
+        "fillAnimating": "sweep"
+      }
+    },
+    "the live tick sweeps over one dwell": {
+      "pass": true,
+      "detail": "sweep"
+    },
+    "the pause toggle exposes its state without double-speaking": {
+      "pass": true,
+      "detail": "false"
+    },
+    "pressing a control shrinks it 5% and releases back": {
+      "pass": true,
+      "detail": {
+        "pressedAt": true,
+        "restsAgain": true,
+        "restTransform": "none"
+      }
+    },
+    "keyboard focus draws a visible ring": {
+      "pass": true,
+      "detail": {
+        "tag": "pill-button",
+        "width": "2px",
+        "color": "rgb(63, 107, 98)",
+        "offset": "3px"
+      }
     },
     "morning leaves the lamp room unlit": {
       "pass": true,
@@ -35,15 +84,15 @@
     "clicking the lighthouse lights it by day": {
       "pass": true,
       "detail": {
-        "flash": 3.1389000000059624,
-        "lantern": 0.6388735778016839
+        "flash": 2.9778999999761604,
+        "lantern": 0.7643398005102101
       }
     },
     "first click sends the boat drifting": {
       "pass": true,
       "detail": {
-        "from": 0.08999347277771885,
-        "to": 0.07466495654882943,
+        "from": 0.08999375298090923,
+        "to": 0.074668282123882,
         "mode": "drift"
       }
     },
@@ -55,7 +104,7 @@
           0.0935,
           0.0935,
           0.0935,
-          0.1219,
+          0.0935,
           0.1219
         ]
       }
@@ -63,21 +112,21 @@
     "fish stay inside the lagoon": {
       "pass": true,
       "detail": {
-        "worstRadius": 0.2197,
+        "worstRadius": 0.2112,
         "limit": 0.45
       }
     },
     "fish keep water under them": {
       "pass": true,
       "detail": {
-        "shallowest": 0.3181,
+        "shallowest": 0.3194,
         "sunk": 0
       }
     },
     "fish never swim through the hull": {
       "pass": true,
       "detail": {
-        "closest": 0.2308,
+        "closest": 0.2303,
         "limit": 0.14
       }
     },
@@ -90,11 +139,11 @@
     "clicking the lagoon raises a wave and scatters the fish": {
       "pass": true,
       "detail": {
-        "fx": 0.66,
+        "fx": 0.61,
         "fy": 0.42,
-        "point": "1.32,0.23",
+        "point": "1.11,-0.07",
         "impulses": "1",
-        "scared": "2.35"
+        "scared": "2.3443999999761584"
       }
     },
     "the loop holds five moments in order": {
@@ -104,15 +153,15 @@
     "the exhibition advances on its own": {
       "pass": true,
       "detail": {
-        "from": 1,
-        "to": 2,
+        "from": 0,
+        "to": 1,
         "dwell": 6000
       }
     },
     "rain: fog reaches the preset": {
       "pass": true,
       "detail": {
-        "fog": 0.02689185307513972,
+        "fog": 0.02702216245321063,
         "night": "false",
         "className": "gallery  weather-rain",
         "state": {
@@ -126,7 +175,7 @@
     "mist: fog reaches the preset": {
       "pass": true,
       "detail": {
-        "fog": 0.06717307186469161,
+        "fog": 0.06743847786155324,
         "night": "true",
         "className": "gallery night weather-mist",
         "state": {
@@ -140,8 +189,8 @@
     "fog is thicker in the misty evening than in the rain": {
       "pass": true,
       "detail": {
-        "rain": 0.02689185307513972,
-        "mist": 0.06717307186469161
+        "rain": 0.02702216245321063,
+        "mist": 0.06743847786155324
       }
     },
     "the misty preset is an evening preset": {
@@ -153,25 +202,25 @@
     "evening lights the beacon": {
       "pass": true,
       "detail": {
-        "lanternEmissive": 1.430148985835565,
-        "searchLight": 3.1284509064812203
+        "lanternEmissive": 1.4196392687104478,
+        "searchLight": 3.1054609002921927
       }
     },
     "evening turns the sweep beam on": {
       "pass": true,
       "detail": {
-        "beaconStrength": 0.9246820838799616
+        "beaconStrength": 0.9029762999619582
       }
     },
     "morning switches the beacon off again": {
       "pass": true,
       "detail": {
-        "lanternEmissive": 0.023819686555909825
+        "lanternEmissive": 0.02667618840874953
       }
     },
     "playing renders continuously": {
       "pass": true,
-      "detail": "4 frames in 2.5s (software renderer)"
+      "detail": "3 frames in 2.5s (software renderer)"
     },
     "paused stops rendering": {
       "pass": true,
@@ -179,12 +228,12 @@
     },
     "paused freezes animation time": {
       "pass": true,
-      "detail": "13.358333333333215"
+      "detail": "13.92499999999985"
     },
     "paused transitions still complete": {
       "pass": true,
       "detail": {
-        "fog": 0.06251670253805391
+        "fog": 0.06123663936547044
       }
     },
     "resuming restarts the loop": {
@@ -209,32 +258,32 @@
     }
   },
   "data": {
-    "playingFrames": 4,
+    "playingFrames": 3,
     "pausedFrames": 0,
     "splash": {
-      "fx": 0.66,
+      "fx": 0.61,
       "fy": 0.42,
-      "point": "1.32,0.23",
+      "point": "1.11,-0.07",
       "impulses": "1",
-      "scared": "2.35"
+      "scared": "2.3443999999761584"
     },
     "cycle": {
       "before": {
-        "step": 1,
-        "weather": "rain",
+        "step": 0,
+        "weather": "clear",
         "night": false,
         "dwell": 6000
       },
       "after": {
-        "step": 2,
-        "weather": "clear",
-        "night": true,
+        "step": 1,
+        "weather": "rain",
+        "night": false,
         "dwell": 6000
       }
     },
     "weather": {
       "rain": {
-        "fog": 0.02689185307513972,
+        "fog": 0.02702216245321063,
         "night": "false",
         "className": "gallery  weather-rain",
         "state": {
@@ -245,7 +294,7 @@
         }
       },
       "mist": {
-        "fog": 0.06717307186469161,
+        "fog": 0.06743847786155324,
         "night": "true",
         "className": "gallery night weather-mist",
         "state": {

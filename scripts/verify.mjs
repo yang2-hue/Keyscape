@@ -120,6 +120,10 @@ try {
   // 1. Boot; the frame holds nothing but the artwork and the controls.
   await page.goto(`${BASE}/?dwell=6`, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => document.querySelector('canvas')?.dataset.study === 'procedural-crescent-v09', null, { timeout: 300000 });
+  // Freeze on morning-clear for the intro and the interaction checks: the loop
+  // is now fast enough (6 s here) that waiting through a click would otherwise
+  // land the scene in the evening and invalidate every "by day" assertion.
+  await page.evaluate(() => window.__galleryCycle.set(0));
   const chrome = await page.evaluate(() => {
     const text = [...document.querySelectorAll('body *')]
       .filter(el => el.children.length === 0 && el.textContent.trim())
@@ -129,7 +133,59 @@ try {
   check('no title or caption sits over the artwork', chrome.headings === 0, chrome.headings);
   check('the only words on screen are the wordmark and the controls', !chrome.text.includes('月湾环抱'), chrome.text);
   check('no import or zoom controls', await page.locator('.import-button, input[type=file], .work-switcher, .weather-switch').count() === 0);
-  check('only the reset view stays in the side tools', await page.locator('.side-tools .round-button').count() === 1);
+  check('the frame carries two controls and nothing floats beside the artwork', await page.evaluate(() =>
+    document.querySelectorAll('.gallery-footer .pill-button').length === 1
+    && document.querySelectorAll('.gallery-footer .icon-button').length === 1
+    && document.querySelectorAll('.side-tools').length === 0));
+
+  // 1b. Chrome states: press shrinks, focus draws a ring, the tick says "now".
+  const chromeState = await page.evaluate(() => {
+    const pill = document.querySelector('.pill-button');
+    const icon = document.querySelector('.icon-button');
+    const style = el => getComputedStyle(el);
+    return {
+      pillRadius: style(pill).borderRadius,
+      pillHeight: Math.round(pill.getBoundingClientRect().height),
+      iconSize: Math.round(icon.getBoundingClientRect().width),
+      paused: pill.dataset.paused,
+      steps: document.querySelectorAll('.moment-steps li').length,
+      liveTicks: document.querySelectorAll('.moment-steps li.now').length,
+      fillAnimating: getComputedStyle(document.querySelector('.moment-fill')).animationName,
+    };
+  });
+  check('controls use the pill and 40px icon shapes', chromeState.pillRadius.startsWith('999') && chromeState.pillHeight >= 40 && chromeState.iconSize >= 40, chromeState);
+  check('the loop shows five ticks with exactly one live', chromeState.steps === 5 && chromeState.liveTicks === 1, chromeState);
+  check('the live tick sweeps over one dwell', chromeState.fillAnimating === 'sweep', chromeState.fillAnimating);
+  check('the pause toggle exposes its state without double-speaking', chromeState.paused === 'false', chromeState.paused);
+  // Press is the only state that needs to move: 5% shrink, no position shift.
+  // Transitions advance on rendered frames, and this machine renders at 1-2 fps,
+  // so both sides of the press are waited for rather than slept through.
+  const pill = page.locator('.pill-button');
+  await pill.hover();
+  const restTransform = await pill.evaluate(el => getComputedStyle(el).transform);
+  await page.mouse.down();
+  const pressedAt = await page.waitForFunction(
+    () => getComputedStyle(document.querySelector('.pill-button')).transform.startsWith('matrix(0.95'),
+    null, { timeout: 20000 }).then(() => true).catch(() => false);
+  await page.mouse.move(2, 2);          // release off-target: no click fires
+  await page.mouse.up();
+  const restsAgain = await page.waitForFunction(
+    rest => getComputedStyle(document.querySelector('.pill-button')).transform === rest,
+    restTransform, { timeout: 20000 }).then(() => true).catch(() => false);
+  check('pressing a control shrinks it 5% and releases back', pressedAt && restsAgain, { pressedAt, restsAgain, restTransform });
+
+  // Keyboard focus must be visible; a ring on a hairlined control is the whole
+  // difference between "quiet" and "unusable without a mouse".
+  // A real Tab press sets the keyboard modality, then focus the control itself
+  // instead of depending on tab order.
+  await page.keyboard.press('Tab');
+  await page.locator('.pill-button').focus();
+  const ring = await page.evaluate(() => {
+    const el = document.activeElement;
+    const style = getComputedStyle(el);
+    return { tag: el.className, width: style.outlineWidth, color: style.outlineColor, offset: style.outlineOffset };
+  });
+  check('keyboard focus draws a visible ring', ring.width === '2px' && ring.offset === '3px', ring);
 
   // 2. Morning: the lighthouse is architecture, not a lamp.
   const darkByDay = await waitFor(page, 'lanternEmissive', 'v < 0.03', 90000);
@@ -205,7 +261,9 @@ try {
   }
   check('clicking the lagoon raises a wave and scatters the fish', Number(splash?.impulses ?? 0) > 0 && Number(splash?.scared ?? 0) > 0, splash ?? scanned.slice(0, 4));
 
-  // 6. Five moments, in order, and the loop advances by itself.
+  // 6. Five moments, in order, and the loop advances by itself. Resuming hands
+  // the loop back to its own timer, which is what this section measures.
+  await page.evaluate(() => window.__galleryCycle.resume());
   const states = await page.evaluate(() => window.__galleryCycle.states);
   const sequence = states.map(s => `${s.night ? 'evening' : 'morning'}-${s.weather}`).join(' ');
   check('the loop holds five moments in order', states.length === 5 && sequence === 'morning-clear morning-rain evening-clear evening-mist evening-rain', sequence);
@@ -253,7 +311,9 @@ try {
   // 9. Playing renders continuously; pausing switches the loop to demand.
   await page.waitForFunction(() => document.querySelector('canvas')?.dataset.renderMode === 'always', null, { timeout: 30000 });
   const playingFrames = await framesIn(page, 2500);
-  check('playing renders continuously', playingFrames > 0, `${playingFrames} frames in 2.5s (software renderer)`);
+  // One frame can straddle the 2.5s window on the software renderer, so fall
+  // back to an event wait before calling it a failure.
+  check('playing renders continuously', playingFrames > 0 || await framesAdvance(page, 2, 60000), `${playingFrames} frames in 2.5s (software renderer)`);
 
   await page.getByRole('button', { name: /暂停动态/ }).click();
   await page.waitForFunction(() => document.querySelector('canvas')?.dataset.renderMode === 'demand', null, { timeout: 30000 });
@@ -275,7 +335,7 @@ try {
   // 10. Mobile layout keeps 44px tap targets and never overflows.
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(2000);
-  const sizes = await page.evaluate(() => [...document.querySelectorAll('.round-button, .mood-controls .text-button')].map(el => {
+  const sizes = await page.evaluate(() => [...document.querySelectorAll('.icon-button, .pill-button')].map(el => {
     const r = el.getBoundingClientRect();
     return { label: (el.textContent ?? '').trim().slice(0, 8), w: Math.round(r.width), h: Math.round(r.height) };
   }).filter(s => s.w > 0 && s.h > 0));

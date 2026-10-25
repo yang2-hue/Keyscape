@@ -4,6 +4,28 @@
 
 2026-10-25：用户要求将月湾的场景逻辑问题整理为文档，见 [月湾产品验收与整改要求](docs/crescent-product-acceptance.md)。后续实现须优先解决“船 → 码头 → 岸阶 → 主路 → 小屋／灯塔”的完整动线、可用台地与入口，以及夜间灯塔扫光；按该文档逐项交付实际证据。本次仅整理文档，不代表整改已完成或验收通过。
 
+## 2026-10-26 第十五次更新（v14：照 awesome-design-md 整理外壳）
+
+用户给了 `VoltAgent/awesome-design-md`，问有没有能用的。仓库是 84 份品牌 DESIGN.md（YAML 令牌 + 规则 + Do/Don't + Iteration Guide）。取了 apple / linear / vercel / notion / oura / clay / mercury / superhuman / mintlify / framer 十份，按"能不能用在只有 6 个元素的展厅"筛。
+
+**采用并落地**（详见 `docs/design-system.md`）：
+1. 令牌化，禁止内联色值——全部 10 份的 Iteration Guide 都写了这条。`:root` 建 `--paper/--ink/--ink-muted/--ink-faint/--hairline/--hairline-strong/--accent/--surface-hover/--surface-press/--veil/--radius-pill/--ease/--fast/--slow/--dwell`。
+2. 背景从"渐变字符串"改为 `background-color` 过渡 + `::before` 高光层 `opacity` 过渡。**渐变不可插值**，原来的 `transition:background .8s` 一直是硬切。
+3. 单一强调色 `--accent`（白天 #3f6b62、夜里 #a9c9bd），只给焦点环与"当前时刻"刻度。
+4. 按压 `scale(.95)`（Apple 称 system-wide micro-interaction），悬停只改表面色，删掉 `translateY(-1px)`。
+5. 焦点环 2px + 偏移 3px（原 6px 太远）。
+6. 图标按钮 36 → 40，触屏 44。
+7. 删 `.side-tools`（浮在画面右侧的孤零零按钮），复位移进页脚控制簇。
+8. 新增五格时刻刻度：当前格拉长 + 一个停留周期内填满；`useAutoCycle` 增加 `run` 计数器（`arm()` 时 +1），保证切页回来时 CSS 动画与停留计时对齐。
+9. 文字下限 11px（原手势提示 9px）；`--ink-muted` 从 4.46:1 提到 4.88:1（雨天 4.81:1）。
+10. 加载层改为 hairline 进度条 + `tabular-nums` 百分比 + `backdrop-filter`，并有 `prefers-reduced-transparency` 实色回退；新增 `prefers-contrast: more`。
+
+**没有采用**：大标题字号体系（我们连标题都删了）、主 CTA 转化色（展厅没有转化）、卡片/阴影/渐变氛围层（只有作品该有阴影）、衬线标题（中文衬线在 11–33px 会显旧）。
+
+**语义修正**：暂停按钮标签会变（暂停动态/继续动态），因此不该再挂 `aria-pressed`（读屏会念"暂停，已按下"），改为 `data-paused` + `:disabled`。
+
+验收：`pnpm verify` **36/36**（新增：控件形状、按压缩 5% 后回弹、焦点环 2px/3px、五格刻度只有一格生效、刻度在扫、暂停状态不双读）。**踩坑**：①CSS transition 的进度按渲染帧推进，本机 1–2fps，`waitForTimeout(240)` 读到的还是起始值——必须 `waitForFunction` 等目标值；②开场加了按压/焦点测试后耗掉数秒，`?dwell=6` 的循环已经走到夜里，导致"早上灯塔不亮"失败——脚本开头用 `__galleryCycle.set(0)` 冻结，第 6 节再 `resume()`；③`Tab` 两次不保证落在目标按钮上，改为先 `keyboard.press('Tab')` 建立键盘模态再 `.focus()`。
+
 ## 2026-10-26 第十四次更新（v13：去掉标题）
 
 用户："给我把月湾环抱这几个雷霆大字去掉，恶心。"

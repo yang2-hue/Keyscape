@@ -1,4 +1,4 @@
-import { Component, Suspense, useEffect, useRef, useState, type ComponentRef, type ReactNode } from 'react';
+import { Component, Suspense, useEffect, useRef, useState, type ComponentRef, type CSSProperties, type ReactNode } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, OrthographicCamera, SoftShadows, useProgress } from '@react-three/drei';
 import { StudioShadows } from './studio-shadows';
@@ -42,11 +42,16 @@ function useReducedMotion() {
 function useAutoCycle() {
   const [step, setStep] = useState(0);
   const [revision, setRevision] = useState(0);
+  // Bumped whenever the dwell timer is (re)armed, so the tick's sweep restarts
+  // with it. Without this the CSS animation would keep running while the tab is
+  // hidden and reach the end of a moment that never started.
+  const [run, setRun] = useState(0);
   const held = useRef(false);
   useEffect(() => {
     let timer = 0;
     const arm = () => {
       window.clearTimeout(timer);
+      setRun(value => value + 1);
       timer = window.setTimeout(() => setStep(value => (value + 1) % CYCLE.length), DWELL_MS);
     };
     const onVisibility = () => { if (document.hidden) window.clearTimeout(timer); else arm(); };
@@ -76,7 +81,7 @@ function useAutoCycle() {
     };
     return () => { delete debug.__galleryCycle; };
   }, [step]);
-  return CYCLE[step];
+  return { ...CYCLE[step], step, run };
 }
 
 /** A render failure used to be permanent: the boundary never reset, so the
@@ -288,32 +293,43 @@ function GalleryScene({ playing, night, weather, view, reduced, onReady }: { pla
 
 export default function App() {
   const [playing, setPlaying] = useState(true);
-  const { weather, night } = useAutoCycle();
+  const { weather, night, step, run } = useAutoCycle();
   const [ready, setReady] = useState(false);
   const [view, setView] = useState<View>({ kind: 'home', serial: 0 });
   const reduced = useReducedMotion();
   const assetProgress = useProgress();
 
   const weatherLabel = WEATHERS.find(item => item.id === weather)?.title ?? '晴天';
+  const progress = Math.round(assetProgress.progress);
 
-  return <main className={`gallery ${night ? 'night' : ''} weather-${weather}`}>
+  return <main className={`gallery ${night ? 'night' : ''} weather-${weather}`} style={{ '--dwell': `${DWELL_MS}ms` } as CSSProperties}>
     <header className="masthead"><a className="wordmark" href="/" aria-label="Keyscape 首页">keyscape<span>✳</span></a></header>
 
     <section className="art-stage" aria-label="可旋转的三维艺术键">
       <SceneBoundary><GalleryScene playing={playing && !reduced} night={night} weather={weather} view={view} reduced={reduced} onReady={() => setReady(true)} /></SceneBoundary>
-      {(!ready || assetProgress.active) && <div className="loading" role="status">正在布置展厅… {Math.round(assetProgress.progress)}%</div>}
+      {(!ready || assetProgress.active) && <div className="loading" role="status">
+        <span className="loading-row"><span>正在布置展厅</span><span className="loading-value">{progress}%</span></span>
+        <span className="loading-track"><span className="loading-fill" style={{ transform: `scaleX(${progress / 100})` }} /></span>
+      </div>}
     </section>
 
-    <aside className="side-tools" aria-label="观察作品">
-      <button className="round-button" aria-label="恢复初始视角" title="恢复初始视角" onClick={() => setView(v => nextView(v, 'home'))}>↺</button>
-    </aside>
-
     <footer className="gallery-footer">
-      <span className="gesture-hint">拖动旋转 <b>·</b> 滚轮拉近 <b>·</b> 点击灯塔、小船、水面</span>
-      <div className="mood-controls">
-        <span className="cycle-state" aria-live="polite">{night ? '晚上' : '早上'} · {weatherLabel}</span>
-        <span className="control-divider" />
-        <button className="text-button" aria-pressed={!playing || reduced} disabled={reduced} onClick={() => setPlaying(!playing)}>{reduced ? '静态模式' : playing ? 'Ⅱ 暂停动态' : '▷ 继续动态'}</button>
+      <p className="gesture-hint">拖动旋转 <b>·</b> 滚轮拉近 <b>·</b> 点击灯塔、小船、水面</p>
+
+      {/* The exhibition runs on its own, so the frame has to say where in the
+          loop it is. Five ticks, one filled: the label reads, the ticks count. */}
+      <div className="moment">
+        <span className="moment-label" aria-live="polite">{night ? '晚上' : '早上'} · {weatherLabel}</span>
+        <ol className="moment-steps" aria-hidden="true">
+          {CYCLE.map((_, index) => <li key={index} className={index < step ? 'done' : index === step ? 'now' : ''}>
+            {index === step ? <span key={`${step}:${run}`} className="moment-fill" /> : null}
+          </li>)}
+        </ol>
+      </div>
+
+      <div className="controls">
+        <button className="pill-button" data-paused={!playing || reduced} disabled={reduced} onClick={() => setPlaying(!playing)}>{reduced ? '静态模式' : playing ? 'Ⅱ 暂停动态' : '▷ 继续动态'}</button>
+        <button className="icon-button" aria-label="恢复初始视角" title="恢复初始视角" onClick={() => setView(v => nextView(v, 'home'))}>↺</button>
       </div>
     </footer>
   </main>;

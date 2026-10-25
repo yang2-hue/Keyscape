@@ -19,7 +19,7 @@ pnpm install
 pnpm dev              # http://127.0.0.1:5173/
 pnpm build            # tsc -b + vite build
 pnpm test             # 19 项单元测试（node --experimental-strip-types --test）
-pnpm verify           # 30 项浏览器检查（需先跑 pnpm dev），产出 outputs/gallery-verify-v11/
+pnpm verify           # 36 项浏览器检查（需先跑 pnpm dev），产出 outputs/gallery-verify-v11/
 pnpm accept:crescent  # 月湾逐项验收：6 张视角截图 + 扫光录屏 + check.json（约 5 分钟）
 ```
 
@@ -43,6 +43,10 @@ pnpm accept:crescent  # 月湾逐项验收：6 张视角截图 + 扫光录屏 + 
 - 拖动／触摸旋转，滚轮或双指缩放，拉近与恢复视角，统一用正交相机。
 - 暂停或系统开启「减少动态」时切到 `frameloop="demand"`：不空转渲染；暂停期间换天气仍会把过渡走完（按帧计数）。
 
+## 界面规范
+
+展厅外壳（页标、控制条、状态层）的设计令牌与规则写在 `docs/design-system.md`：一个强调色只做交互信号、按压缩 5%、悬停不位移、11px 是文字下限、一个控制簇。改样式前先读那一页。
+
 ## 结构
 
 ```text
@@ -59,7 +63,7 @@ src/weather.tsx          雨丝与水面涟漪
 src/weather-model.ts     晴／阴／雨／雾的数值表（纯函数，可单测）
 src/studio.tsx           本地反射环境与软件渲染器探测
 src/studio-shadows.tsx   自研接触阴影（完整释放资源）
-scripts/verify.mjs       浏览器验收（无文案／交互／五个时刻／鱼群边界／渲停／移动端）
+scripts/verify.mjs       浏览器验收（无文案／控件状态／五个时刻／鱼群边界／渲停／移动端）
 scripts/crescent-acceptance.mjs  月湾产品验收（取景截图 + 扫光录屏 + 运动断言）
 outputs/                 每轮迭代的截图、检查记录与差距清单
 ```
@@ -70,7 +74,7 @@ React、TypeScript、Vite、Three.js、React Three Fiber、Drei、@react-three/p
 
 - `tsc -b` 0 错误；`pnpm test` 19/19 通过；`vite build` 通过。
 - 生产包按库拆分为 `three`(705 kB) / `three-fiber`(423 kB) / `three-post`(89 kB) / 应用(73 kB)，`dist` 合计约 1.3 MB。three 单块仍 >500 kB，属库本体体积。
-- `pnpm verify` 30 项浏览器检查：画面无标题与文案（只有作品本体、页标与控制条）、导入与拉近按钮已移除、白天灯塔不发光、点灯塔亮起、鱼群不出界／不沉底／不穿船、小船漂流时船体间隙始终为正、一次漂流两次复位、点水面起波并惊鱼、五个时刻的顺序与自动推进、雾与雨的浓度、晚上点亮与早上熄灭、暂停后 0 帧与过渡仍完成、移动端 44 px 点击区、无页面错误。
+- `pnpm verify` 36 项浏览器检查：画面无标题与文案（只有作品本体、页标与控制条）、控件为胶囊 + 40px 圆形、按压缩 5% 后回弹、键盘焦点环可见、五个时刻刻度只有一个生效并在一个停留周期内填满、导入与拉近按钮已移除、白天灯塔不发光、点灯塔亮起、鱼群不出界／不沉底／不穿船、小船漂流时船体间隙始终为正、一次漂流两次复位、点水面起波并惊鱼、五个时刻的顺序与自动推进、雾与雨的浓度、晚上点亮与早上熄灭、暂停后 0 帧与过渡仍完成、移动端 44 px 点击区、无页面错误。
 - 检查环境是 Chrome / SwiftShader（约 2–3 fps），不能代表真实手机或硬件帧率。正式发布前需真机测试。
 - 月湾的逐项对照见 `outputs/crescent-acceptance-v11/README.md`：码头过渡、灯塔入口、夜间扫光通过；台地与入户通路的**铺装辨识度**、夜景光束强度仍待美术判定。
 - Draco / KTX2 需额外解码器，当前不支持；程序化场景未导出为独立 GLB；项目仅在本地运行，未发布。
