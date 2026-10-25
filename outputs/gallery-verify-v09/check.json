@@ -2,17 +2,16 @@
   "base": "http://127.0.0.1:5173",
   "renderer": "Chrome headless (SwiftShader), not hardware performance",
   "checks": {
-    "deep-link ?work=gate": {
-      "pass": true,
-      "detail": "云门拱语"
-    },
-    "deep-link ?work=crescent": {
+    "study boots with its own title": {
       "pass": true,
       "detail": "月湾环抱"
     },
-    "deep-link ?work=harbor": {
+    "caption carries no filler copy": {
       "pass": true,
-      "detail": "潮汐之间"
+      "detail": "月湾环抱"
+    },
+    "legacy collection chrome is gone": {
+      "pass": true
     },
     "clicking the lagoon raises a wave impulse": {
       "pass": true,
@@ -22,6 +21,74 @@
         "point": "-0.09,-1.38",
         "depth": "-0.6270263957977295",
         "impulses": "1"
+      }
+    },
+    "daylight leaves the lamp room unlit": {
+      "pass": true,
+      "detail": {
+        "lanternEmissive": 0,
+        "beaconStrength": 0,
+        "searchLight": 0
+      }
+    },
+    "阴天: fog and lights reach the preset": {
+      "pass": true,
+      "detail": {
+        "fog": 0.01600354769506655,
+        "sun": 0.4,
+        "weather": "overcast",
+        "className": "gallery  weather-overcast"
+      }
+    },
+    "海雾: fog and lights reach the preset": {
+      "pass": true,
+      "detail": {
+        "fog": 0.0661085294696498,
+        "sun": 0.3,
+        "weather": "mist",
+        "className": "gallery  weather-mist"
+      }
+    },
+    "小雨: fog and lights reach the preset": {
+      "pass": true,
+      "detail": {
+        "fog": 0.033481969602521415,
+        "sun": 0.5,
+        "weather": "rain",
+        "className": "gallery  weather-rain"
+      }
+    },
+    "fog thickens from overcast through rain to mist": {
+      "pass": true,
+      "detail": {
+        "overcast": 0.01600354769506655,
+        "rain": 0.033481969602521415,
+        "mist": 0.0661085294696498
+      }
+    },
+    "returning to clear removes the haze": {
+      "pass": true,
+      "detail": {
+        "fog": 0.0035850679718903715
+      }
+    },
+    "night lights the beacon": {
+      "pass": true,
+      "detail": {
+        "lanternEmissive": 1.2065480668712307,
+        "searchLight": 2.639323896280817
+      }
+    },
+    "night turns the sweep beam on": {
+      "pass": true,
+      "detail": {
+        "beaconStrength": 0.915406682092622
+      }
+    },
+    "daylight switches the beacon off again": {
+      "pass": true,
+      "detail": {
+        "lanternEmissive": 0.02940255274026652
       }
     },
     "playing renders continuously": {
@@ -34,15 +101,13 @@
     },
     "paused freezes animation time": {
       "pass": true,
-      "detail": "0.8583333333333327"
+      "detail": "7.25000000000015"
     },
-    "paused backdrop transitions still render": {
+    "paused weather change completes": {
       "pass": true,
-      "detail": "1 frames in 1.2s after the dusk toggle"
-    },
-    "crescent dusk enters night mode": {
-      "pass": true,
-      "detail": "gallery evening  night"
+      "detail": {
+        "fog": 0.053053472917875426
+      }
     },
     "resuming restarts the loop": {
       "pass": true,
@@ -52,11 +117,11 @@
       "pass": true,
       "detail": {
         "smallest": 44,
-        "count": 6,
+        "count": 8,
         "sizes": []
       }
     },
-    "mobile work switcher does not overflow": {
+    "mobile controls do not overflow": {
       "pass": true,
       "detail": "0px"
     },
@@ -68,7 +133,6 @@
   "data": {
     "playingFrames": 3,
     "pausedFrames": 0,
-    "duskFrames": 1,
     "splash": {
       "fx": 0.33,
       "fy": 0.42,
@@ -76,7 +140,27 @@
       "depth": "-0.6270263957977295",
       "impulses": "1"
     },
-    "mobileSizes": 6,
+    "weather": {
+      "overcast": {
+        "fog": 0.01600354769506655,
+        "sun": 0.4,
+        "weather": "overcast",
+        "className": "gallery  weather-overcast"
+      },
+      "mist": {
+        "fog": 0.0661085294696498,
+        "sun": 0.3,
+        "weather": "mist",
+        "className": "gallery  weather-mist"
+      },
+      "rain": {
+        "fog": 0.033481969602521415,
+        "sun": 0.5,
+        "weather": "rain",
+        "className": "gallery  weather-rain"
+      }
+    },
+    "mobileSizes": 8,
     "smallestTapTarget": 44
   },
   "errors": [],

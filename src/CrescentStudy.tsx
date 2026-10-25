@@ -7,6 +7,7 @@ import {createWaterDynamics} from './water-dynamics';
 import {deformFish,fishBend,stepSpring,turnToward} from './scene-motion';
 import HarborWater from './HarborWater';
 import {Weather} from './weather';
+import {isWet,type WeatherKind} from './weather-model';
 
 /** Module-level constant: an inline array literal would change identity on
  * every render, rebuild the water uniforms and reset their damped values. */
@@ -15,7 +16,8 @@ const SWELL_DIR:[number,number]=[.28,-.96];
 /** Fish wander the lagoon individually instead of riding a shared loop:
  * smooth pseudo-random turning, per-fish speed, shallow-water and boat
  * avoidance. Headings are steered back toward the lagoon center. */
-export default function CrescentStudy({playing,evening,rainy}:{playing:boolean;evening:boolean;rainy:boolean}){
+export default function CrescentStudy({playing,night,weather}:{playing:boolean;night:boolean;weather:WeatherKind}){
+  const rainy=isWet(weather);
   const gl=useThree(state=>state.gl),time=useMemo(()=>({value:0}),[]);
   const study=useMemo(()=>createCrescentBay(time),[time]);
   const field=useMemo(()=>buildHeightfield(study.root,HARBOR.size,112),[study]);
@@ -70,17 +72,18 @@ export default function CrescentStudy({playing,evening,rainy}:{playing:boolean;e
       }
     });
     study.fish.userData.motionTime=t;
-    study.lanternMaterial.emissiveIntensity=THREE.MathUtils.damp(study.lanternMaterial.emissiveIntensity,evening?1.6:.18,3,delta);
+    // The lamp room is unlit glass by day: only the night preset lights it.
+    study.lanternMaterial.emissiveIntensity=THREE.MathUtils.damp(study.lanternMaterial.emissiveIntensity,night?1.6:0,3,delta);
     // Evening lantern glow: light and halo breathe very slightly, never flicker hard.
-    const glow=evening?1.35+.06*Math.sin(t*1.7):0;
+    const glow=night?1.35+.06*Math.sin(t*1.7):0;
     study.lanternLight.intensity=THREE.MathUtils.damp(study.lanternLight.intensity,glow,3,delta);
-    study.haloMaterial.opacity=THREE.MathUtils.damp(study.haloMaterial.opacity,evening?.55+.05*Math.sin(t*1.7+.6):0,3,delta);
-    study.windowMaterial.emissiveIntensity=THREE.MathUtils.damp(study.windowMaterial.emissiveIntensity,evening?.95:0,3,delta);
+    study.haloMaterial.opacity=THREE.MathUtils.damp(study.haloMaterial.opacity,night?.55+.05*Math.sin(t*1.7+.6):0,3,delta);
+    study.windowMaterial.emissiveIntensity=THREE.MathUtils.damp(study.windowMaterial.emissiveIntensity,night?.95:0,3,delta);
     study.beacon.rotation.y=t*.24-1.8;
-    study.beamMaterial.uniforms.strength.value=THREE.MathUtils.damp(study.beamMaterial.uniforms.strength.value,evening?1:0,3,delta);
-    study.searchLight.intensity=THREE.MathUtils.damp(study.searchLight.intensity,evening?3.5:0,3,delta);
+    study.beamMaterial.uniforms.strength.value=THREE.MathUtils.damp(study.beamMaterial.uniforms.strength.value,night?1:0,3,delta);
+    study.searchLight.intensity=THREE.MathUtils.damp(study.searchLight.intensity,night?3.5:0,3,delta);
     if(import.meta.env.DEV){
-      const d=gl.domElement.dataset;d.beaconAngle=String(study.beacon.rotation.y);d.beaconStrength=String(study.beamMaterial.uniforms.strength.value);d.boatTime=String(t);d.fishTime=String(t);d.fishCount='4';d.study='procedural-crescent-v09';d.cameraKind=camera.type;d.cameraZoom=camera instanceof THREE.OrthographicCamera?String(camera.zoom):'perspective';
+      const d=gl.domElement.dataset;d.beaconAngle=String(study.beacon.rotation.y);d.beaconStrength=String(study.beamMaterial.uniforms.strength.value);d.lanternEmissive=String(study.lanternMaterial.emissiveIntensity);d.searchLightIntensity=String(study.searchLight.intensity);d.boatTime=String(t);d.fishTime=String(t);d.fishCount='4';d.study='procedural-crescent-v09';d.cameraKind=camera.type;d.cameraZoom=camera instanceof THREE.OrthographicCamera?String(camera.zoom):'perspective';
       d.waterHeight=String(dynamics.probe.height);d.waterSlope=String(dynamics.probe.slopeX);d.waveSteps=String(dynamics.steps);d.waveReads=String(dynamics.reads);d.waveErrors=String(dynamics.readErrors);d.waveImpulses=String(dynamics.impulses);
       d.boatHeave=String(study.boat.position.y);d.boatPitch=String(study.boat.rotation.x);d.fishTailAngle=String(study.fishActors[0].tail.rotation.y);d.fishBend=String(study.fishActors[0].body.userData.bend??0);
     }
@@ -89,7 +92,7 @@ export default function CrescentStudy({playing,evening,rainy}:{playing:boolean;e
     <primitive object={study.root} dispose={null}/>
     <primitive object={study.boat} dispose={null}/>
     <primitive object={study.fish} dispose={null}/>
-    <HarborWater field={field} footprint={study.footprint} playing={playing} evening={evening} rainy={rainy} dynamics={dynamics} deepTint={1} swellAmp={.016} swellDir={SWELL_DIR}/>
+    <HarborWater field={field} footprint={study.footprint} playing={playing} evening={night} rainy={rainy} dynamics={dynamics} deepTint={1} swellAmp={.016} swellDir={SWELL_DIR}/>
     <Weather field={field} playing={playing} rainy={rainy}/>
   </group>;
 }

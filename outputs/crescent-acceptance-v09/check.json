@@ -5,29 +5,29 @@
     "night mode lights the lantern and the beam": {
       "pass": true,
       "detail": {
-        "beaconStrength": "0.9373881048140256",
-        "night": "gallery evening  night"
+        "beaconStrength": "0.9381163951822071",
+        "night": "gallery night weather-clear"
       }
     },
     "lighthouse beam sweeps while playing": {
       "pass": true,
       "detail": {
-        "from": "-1.018",
-        "to": "-0.706",
-        "delta": "0.312"
+        "from": "-1.020",
+        "to": "-0.720",
+        "delta": "0.300"
       }
     },
     "pausing freezes the beam": {
       "pass": true,
       "detail": {
-        "angle": "-0.681999999999995"
+        "angle": "-0.6959999999999957"
       }
     },
     "pausing freezes the fish and boat": {
       "pass": true,
       "detail": {
-        "fishTailAngle": "-0.12157205885372505",
-        "boatTime": "4.6583333333333545"
+        "fishTailAngle": "-0.13504444210697505",
+        "boatTime": "4.600000000000018"
       }
     },
     "resuming restarts the sweep": {
@@ -37,13 +37,13 @@
     "reduced motion stops the sweep": {
       "pass": true,
       "detail": {
-        "angle": "-0.6079999999999912"
+        "angle": "-0.6339999999999926"
       }
     },
     "reduced motion keeps the lantern lit": {
       "pass": true,
       "detail": {
-        "beaconStrength": "0.9997331169472021"
+        "beaconStrength": "0.9996406091345842"
       }
     },
     "reduced motion disables the animation toggle": {
@@ -59,9 +59,9 @@
     "recording muxed to webm": {
       "pass": true,
       "detail": {
-        "frames": 240,
+        "frames": 239,
         "fps": 20,
-        "seconds": 12
+        "seconds": 11.95
       }
     },
     "no page errors": {
@@ -70,7 +70,7 @@
     }
   },
   "data": {
-    "loadMs": 10960,
+    "loadMs": 11576,
     "canvas": {
       "width": 1195,
       "height": 900
@@ -131,22 +131,22 @@
     },
     "recording": {
       "file": "outputs\\crescent-acceptance-v09\\lighthouse-sweep.webm",
-      "frames": 240,
-      "capturedSeconds": 119.02,
+      "frames": 239,
+      "capturedSeconds": 118.43,
       "captureFps": 2.01,
-      "clipSeconds": 12,
+      "clipSeconds": 11.95,
       "speedFactor": 9.9,
-      "beamFrom": -1.4100000000000008,
-      "beamTo": 0.6360000000000154,
+      "beamFrom": -1.390000000000001,
+      "beamTo": 0.6500000000000143,
       "beamTurnDegrees": 117,
       "ffmpeg": "C:\\Users\\ASUS\\AppData\\Local\\ms-playwright\\ffmpeg-1013\\ffmpeg-win64.exe",
       "note": "Captured frame by frame on a software renderer, then re-timed by speedFactor so the beam sweeps at its real angular speed. Frame pacing reflects capture rate, not hardware."
     },
     "motion": {
-      "pauseFrozen": "-0.681999999999995",
-      "reducedFrozen": "-0.6079999999999912",
-      "sweepFrom": -1.0180000000000022,
-      "sweepTo": -0.7059999999999962
+      "pauseFrozen": "-0.6959999999999957",
+      "reducedFrozen": "-0.6339999999999926",
+      "sweepFrom": -1.0200000000000022,
+      "sweepTo": -0.7199999999999969
     }
   },
   "errors": [],

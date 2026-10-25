@@ -65,20 +65,3 @@ export function buildHeightfield(root: THREE.Object3D, size = HARBOR.size, resol
     return heights[iz * resolution + ix];
   } };
 }
-
-/** Find the largest submerged circle that the coastal study's fish can circle
- * without crossing dry terrain. Returns null when the bay holds no water. */
-export function findSwimLoop(field: Heightfield) {
-  for (const radius of [0.32, 0.24, 0.16, 0.09]) {
-    for (let z = 0.1; z < 1.15; z += 0.12) for (let x = -1.15; x < 0.7; x += 0.12) {
-      if (Math.abs(x) + radius + 0.1 > 1.44 || Math.abs(z) + radius * 0.75 + 0.1 > 1.44) continue;
-      let valid = true;
-      for (const fraction of [0,.35,.65,1]) for (let i = 0; i < 48; i++) {
-        const angle = i * Math.PI / 24;
-        if (field.sample(x + Math.cos(angle) * radius*fraction, z + Math.sin(angle) * radius * 0.75*fraction) > HARBOR.water - 0.2) { valid = false; break; }
-      }
-      if (valid) return { x, z, radius };
-    }
-  }
-  return null;
-}

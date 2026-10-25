@@ -4,6 +4,27 @@
 
 2026-10-25：用户要求将月湾的场景逻辑问题整理为文档，见 [月湾产品验收与整改要求](docs/crescent-product-acceptance.md)。后续实现须优先解决“船 → 码头 → 岸阶 → 主路 → 小屋／灯塔”的完整动线、可用台地与入口，以及夜间灯塔扫光；按该文档逐项交付实际证据。本次仅整理文档，不代表整改已完成或验收通过。
 
+## 2026-10-26 当前推进状态（v10，优先于下文一切历史描述）
+
+**仓库只保留一件作品：`月湾环抱`。** 用户明确要求删除 `潮汐之间`、`云门拱语`、`蓝洞来信`，且“不要保留”。
+
+已删除（工作区不再有，历史提交里仍在，未改写 git 历史）：`src/CoastalStudy.tsx`、`src/coastal-study.ts`、`src/CloudGateStudy.tsx`、`src/cloud-gate.ts`、`src/ArtKey.tsx`（其中 `StudioEnvironment` / `useSoftwareRenderer` 拆到新的 `src/studio.tsx`）、`tests/gate.test.ts`、三件作品的参考图 webp 与 `work/archive` 全部历史资产。`tests/harbor.test.ts` 改名 `tests/layout.test.ts`（测的是共享的键帽轮廓与高度场）。
+
+展厅随之改造：没有作品切换、方向键切换和 `?work=<id>` 深链；画面上只剩作品名，编号／英文副标题／描述／study-label／竖排标语／edition 行全部删除。`src/gallery-state.ts` 只剩 `nextView`。
+
+本轮同时改了三处视觉与一套系统：
+
+1. **灯塔白天不再发光**：灯室玻璃的 `emissiveIntensity` 原本固定 0.18，白天看着是亮的；现在白天为 0，光锥与聚光灯也只由夜航驱动。
+2. **天气由 2 种扩到 4 种**：晴／阴／雨／雾，新增指数雾；光照、雾、背景色、雨丝与水面涟漪联动。数值表在 `src/weather-model.ts`（纯函数，有单测），切换是阻尼过渡。
+3. **水面着色器接入场景雾**：`HarborWater` 的 `ShaderMaterial` 加了 `fog` 与 `fog_pars_vertex/fog_vertex/fog_pars_fragment/fog_fragment`，并在 `uniforms` 里补 `fogColor` / `fogDensity` 占位（缺这两个，three 的 `refreshFogUniforms` 会在首次绘制抛 `Cannot read properties of undefined`）。否则雾天只有陆地变淡，海仍是一片饱和的青绿。
+4. **按需渲染的过渡窗口改为按帧计数**（`TRANSITION_FRAMES = 100`）：原来按墙钟 1.6 秒，在 2 fps 的软渲染下只有三帧，天气过渡会停在半路；暂停时清空剩余窗口，保证“暂停即停帧”。
+
+验收：`tsc` 0 错误、23 项单测、`vite build` 1.6 MB、`pnpm verify` 21 项全过。证据在 `outputs/gallery-verify-v09/`（含晴／阴／雨／雾／夜／移动端截图与 `check.json`）。
+
+**`导入作品` 仍是唯一能看别的东西的入口**：选择本地 `.glb`（贴图与缓冲必须内嵌，≤50 MB），校验通过后归一化到键帽尺度放进同一个展厅，仅在本机预览、不上传。它与产品方向无关，属于早期遗留能力；用户若不想要，直接删 `src/model.ts` + `App` 里的导入分支即可。
+
+
+
 ## 2026-10-25 当前推进状态
 
 用户在代码审查后要求“继续推进，感觉美术太离谱了”，已明确授权继续修改当前月湾实现，优先级高于下方历史“只做视觉交接”的限制。本轮聚焦 C/月湾，未调用付费资产生成。v02 调整建筑比例和屋顶、岩岸与沙滩、植被、灯塔位置、深浅水色；修复船只波场采样坐标，并将月湾测试纳入默认测试。实现文件仍为 src/crescent-bay.ts、src/CrescentStudy.tsx 与共用材质/水体模块。实际截图、检查结果和剩余差距见 outputs/crescent-v02/。直达预览 /?work=crescent。概念图写实精度仍未达到，美术验收仍由用户决定，不要将本次迭代称为已通过美术验收。

@@ -22,6 +22,7 @@ const vertex=`
   uniform float time;uniform float swellAmp;uniform vec2 swellDir;uniform float level;
   varying vec3 waterPoint;varying vec3 worldPoint;varying vec3 waterNormal;varying vec3 viewPoint;
   varying float waveHeight;
+  #include <fog_pars_vertex>
   void main(){vec3 p=position;waterNormal=normal;
     float top=smoothstep(.5,.9,normal.y);
     float upper=smoothstep(level-.04,level-.01,p.y);
@@ -29,8 +30,11 @@ const vertex=`
     waveHeight+=swellAmp*sin(dot(p.xz,swellDir)*2.6-time*1.15)*upper;
     p.y+=waveHeight;waterPoint=p;
     vec4 world=modelMatrix*vec4(p,1.0);worldPoint=world.xyz;
-    vec4 view=modelViewMatrix*vec4(p,1.0);viewPoint=view.xyz;
-    gl_Position=projectionMatrix*view;
+    vec4 mvPosition=modelViewMatrix*vec4(p,1.0);viewPoint=mvPosition.xyz;
+    gl_Position=projectionMatrix*mvPosition;
+    // The water is a custom shader, so it has to opt into the scene fog by
+    // hand: without it the sea stays vivid while the island dissolves in mist.
+    #include <fog_vertex>
   }`;
 const fragment=`
   uniform sampler2D sceneColor;uniform sampler2D sceneDepth;
@@ -42,6 +46,7 @@ const fragment=`
   uniform float orthographic;uniform vec3 cameraRay;
   varying vec3 waterPoint;varying vec3 worldPoint;varying vec3 waterNormal;varying vec3 viewPoint;
   varying float waveHeight;
+  #include <fog_pars_fragment>
   vec3 viewAt(vec2 uv,float d){vec4 p=inverseProjection*vec4(uv*2.0-1.0,d*2.0-1.0,1.0);return p.xyz/p.w;}
   void main(){
     vec2 uv=gl_FragCoord.xy/resolution;
@@ -85,6 +90,7 @@ const fragment=`
     float crest=smoothstep(.022,.060,waveHeight)*smoothstep(.12,.45,length(wave.ba));
     color=mix(color,vec3(.89,.96,.89),top*clamp(shore*broken*.55+crest*.16,0.0,.65));
     gl_FragColor=vec4(color,1.0);
+    #include <fog_fragment>
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
   }`;
@@ -139,7 +145,11 @@ export default function HarborWater({ field, footprint, playing, evening, rainy,
     return {bed,blank};
   },[field]);
   useEffect(()=>()=>{textures.bed.dispose();textures.blank.dispose();},[textures]);
-  const uniforms=useMemo(()=>({sceneColor:{value:capture.texture},sceneDepth:{value:capture.depthTexture},waves:{value:dynamics?.texture??textures.blank},bedHeights:{value:textures.bed},inverseProjection:{value:new THREE.Matrix4()},inverseWater:{value:new THREE.Matrix4()},waterMatrix:{value:new THREE.Matrix4()},resolution:{value:new THREE.Vector2()},time:{value:0},rain:{value:0},dusk:{value:0},level:{value:HARBOR.water},deepTint:{value:deepTint},swellAmp:{value:swellAmp},swellDir:{value:new THREE.Vector2(...swellDir)},orthographic:{value:0},cameraRay:{value:new THREE.Vector3()}}),[capture,textures,dynamics,deepTint,swellAmp,swellDir]);
+  const uniforms=useMemo(()=>({sceneColor:{value:capture.texture},sceneDepth:{value:capture.depthTexture},waves:{value:dynamics?.texture??textures.blank},bedHeights:{value:textures.bed},inverseProjection:{value:new THREE.Matrix4()},inverseWater:{value:new THREE.Matrix4()},waterMatrix:{value:new THREE.Matrix4()},resolution:{value:new THREE.Vector2()},time:{value:0},rain:{value:0},dusk:{value:0},level:{value:HARBOR.water},deepTint:{value:deepTint},swellAmp:{value:swellAmp},swellDir:{value:new THREE.Vector2(...swellDir)},orthographic:{value:0},cameraRay:{value:new THREE.Vector3()},
+    // `fog` on a ShaderMaterial makes the renderer write these two uniforms
+    // from scene.fog every frame; they must exist here or refreshFogUniforms
+    // throws on the first draw.
+    fogColor:{value:new THREE.Color('#e9e5dc')},fogDensity:{value:0}}),[capture,textures,dynamics,deepTint,swellAmp,swellDir]);
   const background=useMemo(()=>new THREE.Color('#e9e5dc'),[]);
   useEffect(()=>{
     if(!import.meta.env.DEV)return;
@@ -209,7 +219,7 @@ export default function HarborWater({ field, footprint, playing, evening, rainy,
     <mesh geometry={resources.floor} material={resources.floorMaterial} receiveShadow />
     <group ref={water}>
       <mesh geometry={resources.volume} name="CoastalWaterSurface" renderOrder={2} onClick={splash}>
-        <shaderMaterial uniforms={uniforms} vertexShader={vertex} fragmentShader={fragment} side={THREE.FrontSide} />
+        <shaderMaterial uniforms={uniforms} vertexShader={vertex} fragmentShader={fragment} side={THREE.FrontSide} fog />
       </mesh>
     </group>
   </group>;

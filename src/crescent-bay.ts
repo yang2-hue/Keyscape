@@ -248,7 +248,9 @@ export function createCrescentBay(time:{value:number}){
   }
   mesh(new THREE.CylinderGeometry(.125,.107,.03,48),m.stone,[0,.615,0],tower);
   mesh(new THREE.CylinderGeometry(.06,.06,.13,16),m.glass,[0,.70,0],tower);
-  const lanternMaterial=new THREE.MeshStandardMaterial({color:'#f4dfa4',emissive:'#ffbf65',emissiveIntensity:.2,roughness:.55});
+  // Unlit by day: pale glass with no emissive, so the lighthouse reads as
+  // architecture rather than a lamp that is on at noon.
+  const lanternMaterial=new THREE.MeshStandardMaterial({color:'#efe6cd',emissive:'#ffbf65',emissiveIntensity:0,roughness:.55});
   const lantern=mesh(new THREE.SphereGeometry(.035,12,8),lanternMaterial,[0,.70,0],tower);lantern.name='CrescentLantern';
   // Warm evening glow: a small real light plus a soft halo billboard so the
   // lantern reads from the default camera distance, not only in close-up.
