@@ -2,13 +2,21 @@
   "base": "http://127.0.0.1:5173",
   "renderer": "Chrome headless (SwiftShader), not hardware performance",
   "checks": {
-    "study boots with its own title": {
+    "no title or caption sits over the artwork": {
       "pass": true,
-      "detail": "月湾环抱"
+      "detail": 0
     },
-    "caption carries no filler copy": {
+    "the only words on screen are the wordmark and the controls": {
       "pass": true,
-      "detail": "月湾环抱"
+      "detail": [
+        "✳",
+        "当前浏览器不支持 3D 展示。",
+        "↺",
+        "·",
+        "·",
+        "早上 · 晴天",
+        "Ⅱ 暂停动态"
+      ]
     },
     "no import or zoom controls": {
       "pass": true
@@ -27,15 +35,15 @@
     "clicking the lighthouse lights it by day": {
       "pass": true,
       "detail": {
-        "flash": 3.344500000000001,
-        "lantern": 0.5435600140318331
+        "flash": 3.1389000000059624,
+        "lantern": 0.6388735778016839
       }
     },
     "first click sends the boat drifting": {
       "pass": true,
       "detail": {
-        "from": 0.08997865630725659,
-        "to": 0.07401343182140059,
+        "from": 0.08999347277771885,
+        "to": 0.07466495654882943,
         "mode": "drift"
       }
     },
@@ -55,7 +63,7 @@
     "fish stay inside the lagoon": {
       "pass": true,
       "detail": {
-        "worstRadius": 0.2357,
+        "worstRadius": 0.2197,
         "limit": 0.45
       }
     },
@@ -69,7 +77,7 @@
     "fish never swim through the hull": {
       "pass": true,
       "detail": {
-        "closest": 0.236,
+        "closest": 0.2308,
         "limit": 0.14
       }
     },
@@ -84,7 +92,7 @@
       "detail": {
         "fx": 0.66,
         "fy": 0.42,
-        "point": "1.32,0.18",
+        "point": "1.32,0.23",
         "impulses": "1",
         "scared": "2.35"
       }
@@ -104,7 +112,7 @@
     "rain: fog reaches the preset": {
       "pass": true,
       "detail": {
-        "fog": 0.02657864627894583,
+        "fog": 0.02689185307513972,
         "night": "false",
         "className": "gallery  weather-rain",
         "state": {
@@ -118,7 +126,7 @@
     "mist: fog reaches the preset": {
       "pass": true,
       "detail": {
-        "fog": 0.06720669031398321,
+        "fog": 0.06717307186469161,
         "night": "true",
         "className": "gallery night weather-mist",
         "state": {
@@ -132,8 +140,8 @@
     "fog is thicker in the misty evening than in the rain": {
       "pass": true,
       "detail": {
-        "rain": 0.02657864627894583,
-        "mist": 0.06720669031398321
+        "rain": 0.02689185307513972,
+        "mist": 0.06717307186469161
       }
     },
     "the misty preset is an evening preset": {
@@ -145,25 +153,25 @@
     "evening lights the beacon": {
       "pass": true,
       "detail": {
-        "lanternEmissive": 1.3990876996889583,
-        "searchLight": 3.0605043430251566
+        "lanternEmissive": 1.430148985835565,
+        "searchLight": 3.1284509064812203
       }
     },
     "evening turns the sweep beam on": {
       "pass": true,
       "detail": {
-        "beaconStrength": 0.9069753169693364
+        "beaconStrength": 0.9246820838799616
       }
     },
     "morning switches the beacon off again": {
       "pass": true,
       "detail": {
-        "lanternEmissive": 0.02939782559377341
+        "lanternEmissive": 0.023819686555909825
       }
     },
     "playing renders continuously": {
       "pass": true,
-      "detail": "2 frames in 2.5s (software renderer)"
+      "detail": "4 frames in 2.5s (software renderer)"
     },
     "paused stops rendering": {
       "pass": true,
@@ -171,12 +179,12 @@
     },
     "paused freezes animation time": {
       "pass": true,
-      "detail": "13.316666666666551"
+      "detail": "13.358333333333215"
     },
     "paused transitions still complete": {
       "pass": true,
       "detail": {
-        "fog": 0.06242610150619002
+        "fog": 0.06251670253805391
       }
     },
     "resuming restarts the loop": {
@@ -201,12 +209,12 @@
     }
   },
   "data": {
-    "playingFrames": 2,
+    "playingFrames": 4,
     "pausedFrames": 0,
     "splash": {
       "fx": 0.66,
       "fy": 0.42,
-      "point": "1.32,0.18",
+      "point": "1.32,0.23",
       "impulses": "1",
       "scared": "2.35"
     },
@@ -226,7 +234,7 @@
     },
     "weather": {
       "rain": {
-        "fog": 0.02657864627894583,
+        "fog": 0.02689185307513972,
         "night": "false",
         "className": "gallery  weather-rain",
         "state": {
@@ -237,7 +245,7 @@
         }
       },
       "mist": {
-        "fog": 0.06720669031398321,
+        "fog": 0.06717307186469161,
         "night": "true",
         "className": "gallery night weather-mist",
         "state": {

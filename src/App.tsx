@@ -9,9 +9,6 @@ import CrescentStudy from './CrescentStudy';
 import { nextView, type View } from './gallery-state';
 import { WEATHERS, weatherParams, type WeatherKind } from './weather-model';
 
-/** One study, one key. */
-const ARTWORK = { name: '月湾环抱' };
-
 /** Five moments, in order: morning clear, morning rain, evening clear, evening
  * fog, evening rain. The exhibition changes on its own — weather and time of
  * day are part of the piece, not a settings panel. */
@@ -305,10 +302,6 @@ export default function App() {
     <section className="art-stage" aria-label="可旋转的三维艺术键">
       <SceneBoundary><GalleryScene playing={playing && !reduced} night={night} weather={weather} view={view} reduced={reduced} onReady={() => setReady(true)} /></SceneBoundary>
       {(!ready || assetProgress.active) && <div className="loading" role="status">正在布置展厅… {Math.round(assetProgress.progress)}%</div>}
-    </section>
-
-    <section className="art-caption" aria-live="polite" aria-atomic="true">
-      <h1>{ARTWORK.name}</h1>
     </section>
 
     <aside className="side-tools" aria-label="观察作品">

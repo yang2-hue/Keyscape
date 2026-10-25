@@ -117,13 +117,17 @@ try {
   page.on('pageerror', e => results.errors.push(`pageerror: ${e.message}`));
   page.on('console', m => { if (m.type() === 'error') results.errors.push(`console: ${m.text()}`); });
 
-  // 1. Boot; only the artwork and its name remain in the chrome.
+  // 1. Boot; the frame holds nothing but the artwork and the controls.
   await page.goto(`${BASE}/?dwell=6`, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => document.querySelector('canvas')?.dataset.study === 'procedural-crescent-v09', null, { timeout: 300000 });
-  const heading = (await page.locator('h1').innerText()).trim();
-  check('study boots with its own title', heading === '月湾环抱', heading);
-  const captionText = (await page.locator('.art-caption').innerText()).trim();
-  check('caption carries no filler copy', captionText === '月湾环抱', captionText);
+  const chrome = await page.evaluate(() => {
+    const text = [...document.querySelectorAll('body *')]
+      .filter(el => el.children.length === 0 && el.textContent.trim())
+      .map(el => el.textContent.trim());
+    return { headings: document.querySelectorAll('h1, h2, .art-caption').length, text };
+  });
+  check('no title or caption sits over the artwork', chrome.headings === 0, chrome.headings);
+  check('the only words on screen are the wordmark and the controls', !chrome.text.includes('月湾环抱'), chrome.text);
   check('no import or zoom controls', await page.locator('.import-button, input[type=file], .work-switcher, .weather-switch').count() === 0);
   check('only the reset view stays in the side tools', await page.locator('.side-tools .round-button').count() === 1);
 
