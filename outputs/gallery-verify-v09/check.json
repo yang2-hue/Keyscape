@@ -19,8 +19,8 @@
       "detail": {
         "fx": 0.33,
         "fy": 0.42,
-        "point": "-0.08,-1.39",
-        "depth": "-0.627170341014862",
+        "point": "-0.09,-1.38",
+        "depth": "-0.6270263957977295",
         "impulses": "1"
       }
     },
@@ -34,7 +34,7 @@
     },
     "paused freezes animation time": {
       "pass": true,
-      "detail": "0.9249999999999992"
+      "detail": "0.8166666666666662"
     },
     "paused backdrop transitions still render": {
       "pass": true,
@@ -72,8 +72,8 @@
     "splash": {
       "fx": 0.33,
       "fy": 0.42,
-      "point": "-0.08,-1.39",
-      "depth": "-0.627170341014862",
+      "point": "-0.09,-1.38",
+      "depth": "-0.6270263957977295",
       "impulses": "1"
     },
     "mobileSizes": 6,

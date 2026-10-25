@@ -133,6 +133,11 @@ try {
   await page.getByRole('button', { name: /继续动态/ }).click();
   await page.waitForFunction(() => document.querySelector('canvas')?.dataset.renderMode === 'always', null, { timeout: 30000 });
   check('resuming restarts the loop', (await framesIn(page, 1500)) > 0 || await framesAdvance(page, 2), 'frames advanced');
+
+  // Back to daylight for the reference screenshot.
+  await page.getByRole('button', { name: /夜航/ }).click();
+  await page.waitForFunction(() => !document.querySelector('main.gallery')?.classList.contains('night'), null, { timeout: 30000 });
+  await page.waitForTimeout(1500);
   await page.screenshot({ path: path.join(OUT, 'crescent-main.png') });
 
   // 5. Mobile layout keeps 44px tap targets. Reuse the page so only one WebGL
