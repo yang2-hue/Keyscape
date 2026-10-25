@@ -25,20 +25,44 @@ function surface(kind:'stone'|'plaster'|'wood'|'sand'|'tile'){
     ctx.fillStyle=`rgba(148,135,111,${random()*.10})`;ctx.beginPath();ctx.ellipse(random()*n,random()*n,3+random()*22,2+random()*8,random()*3,0,Math.PI*2);ctx.fill();
   }
   const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;
-  texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.anisotropy=4;
+  texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.anisotropy=8;
+  return {map:texture,normal:normalFrom(image,n)};
+}
+
+/** Sobel the same pixels into a normal map. A 256 px bump map only shifts the
+ * lighting a little; a normal map keeps the grain crisp at grazing angles,
+ * which is where cliffs are actually looked at. */
+function normalFrom(image:ImageData,n:number){
+  const canvas=document.createElement('canvas');canvas.width=canvas.height=n;
+  const ctx=canvas.getContext('2d')!;
+  const out=ctx.createImageData(n,n);
+  const at=(x:number,y:number)=>image.data[((y+n)%n*n+(x+n)%n)*4];
+  for(let y=0;y<n;y++)for(let x=0;x<n;x++){
+    const i=(y*n+x)*4,strength=.55;
+    const nx=-(at(x+1,y)-at(x-1,y))*strength;
+    const ny=-(at(x,y+1)-at(x,y-1))*strength;
+    const nz=255,len=Math.hypot(nx,ny,nz)||1;
+    out.data[i]=Math.round((nx/len*.5+.5)*255);
+    out.data[i+1]=Math.round((ny/len*.5+.5)*255);
+    out.data[i+2]=Math.round((nz/len*.5+.5)*255);
+    out.data[i+3]=255;
+  }
+  ctx.putImageData(out,0,0);
+  const texture=new THREE.CanvasTexture(canvas);
+  texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.anisotropy=8;
   return texture;
 }
 
 export function makeCoastalMaterials(time:{value:number},water:number,causticGain=1){
   const maps={stone:surface('stone'),plaster:surface('plaster'),wood:surface('wood'),sand:surface('sand'),tile:surface('tile')};
-  const standard=(color:string,roughness=.88,map?:THREE.Texture,bump=.004)=>new THREE.MeshStandardMaterial({color,roughness,map,bumpMap:map,bumpScale:bump});
+  const standard=(color:string,roughness=.88,surface?:{map:THREE.Texture;normal:THREE.Texture},normalScale=.7)=>new THREE.MeshStandardMaterial({color,roughness,map:surface?.map,normalMap:surface?.normal,normalScale:new THREE.Vector2(normalScale,normalScale)});
   const materials={
-    stone:standard('#d9ceb6',.95,maps.stone,.007),
-    plaster:standard('#f4ead5',.94,maps.plaster,.003),
-    rock:standard('#c9bfa8',.96,maps.stone,.009),
-    wood:standard('#b6a17c',.92,maps.wood,.004),
-    darkwood:standard('#746c54',.94,maps.wood,.004),
-    sand:standard('#e7d8b6',.98,maps.sand,.003),
+    stone:standard('#d9ceb6',.95,maps.stone,.9),
+    plaster:standard('#f4ead5',.94,maps.plaster,.45),
+    rock:standard('#c9bfa8',.96,maps.stone,1.05),
+    wood:standard('#b6a17c',.92,maps.wood,.55),
+    darkwood:standard('#746c54',.94,maps.wood,.55),
+    sand:standard('#e7d8b6',.98,maps.sand,.45),
     roof:standard('#c8825c',.87,maps.tile,.003),
     teal:standard('#3b6b65'),glass:standard('#263f41',.35),
     ivory:standard('#f6f0df',.65),metal:standard('#5b665c',.5),
@@ -68,6 +92,10 @@ export function makeCoastalMaterials(time:{value:number},water:number,causticGai
     };
     material.customProgramCacheKey=()=> 'coastal-study-caustics-v1-'+causticGain;
   }
-  return {materials,dispose(){Object.values(materials).forEach(m=>m.dispose());Object.values(maps).forEach(t=>t.dispose());}};
+  return {materials,dispose(){
+    Object.values(materials).forEach(m=>m.dispose());
+    Object.values(maps).forEach(s=>{s.map.dispose();s.normal.dispose();});
+    Object.values(materials).forEach(m=>{(m as THREE.MeshStandardMaterial).normalMap?.dispose();});
+  }};
 }
 export type CoastalMaterials=ReturnType<typeof makeCoastalMaterials>['materials'];

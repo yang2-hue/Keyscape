@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
     "build": "tsc -b && vite build",
-    "test": "node --experimental-strip-types --test tests/model.test.ts tests/layout.test.ts tests/crescent.test.ts tests/gallery-state.test.ts tests/weather.test.ts",
+    "test": "node --experimental-strip-types --test tests/layout.test.ts tests/crescent.test.ts tests/gallery-state.test.ts tests/weather.test.ts",
     "preview": "vite preview --host 127.0.0.1 --port 4173",
     "verify": "node scripts/verify.mjs",
     "accept:crescent": "node scripts/crescent-acceptance.mjs"

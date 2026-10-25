@@ -75,17 +75,20 @@ export function createCrescentBay(time:{value:number}){
   // close range the cliffs read as smooth clay. Tile it and deepen the bump on
   // the two surfaces that are mostly rock.
   const extraTextures:THREE.Texture[]=[];
-  const retile=(source:THREE.Material,repeat:number,bump:number)=>{
+  const retile=(source:THREE.Material,repeat:number)=>{
     const material=source as THREE.MeshStandardMaterial;
-    if(!material.map)return;
-    const map=material.map.clone();map.repeat.set(repeat,repeat);map.anisotropy=8;map.needsUpdate=true;
-    material.map=map;material.bumpMap=map;material.bumpScale=bump;
-    extraTextures.push(map);
+    // Colour and normal must share the tiling or the grain slides off the relief.
+    for(const key of ['map','normalMap'] as const){
+      const source_=material[key];
+      if(!source_)continue;
+      const texture=source_.clone();texture.repeat.set(repeat,repeat);texture.anisotropy=8;texture.needsUpdate=true;
+      material[key]=texture;extraTextures.push(texture);
+    }
   };
-  retile(m.rock,7,.017);
+  retile(m.rock,7);
   // Separate limestone cliffs, warm beach and cooler submerged rock.
   const terrainMaterial=m.rock.clone();terrainMaterial.vertexColors=true;terrainMaterial.color.set('#ffffff');
-  retile(terrainMaterial,13,.03);
+  retile(terrainMaterial,13);
   const onTerrainCompile=m.rock.onBeforeCompile;
   terrainMaterial.onBeforeCompile=(shader,renderer)=>{
     onTerrainCompile.call(m.rock,shader,renderer);
@@ -122,13 +125,26 @@ export function createCrescentBay(time:{value:number}){
   // 176 cells across 3.14 units is 1.8 cm per cell: cliffs stop reading as a
   // staircase of flat quads when the camera comes close.
   const floor=new THREE.PlaneGeometry(3.14,3.14,176,176);floor.rotateX(-Math.PI/2);
-  const fp=floor.attributes.position;
+  const fp=floor.attributes.position,segments=176,row=segments+1,cell=3.14/segments;
   for(let i=0;i<fp.count;i++){
     const [x,z]=roundedSquarePoint(fp.getX(i),fp.getZ(i));
     fp.setXYZ(i,x,crescentHeight(x,z),z);
-  }floor.computeVertexNormals();
+  }
+  // Rock detail: high-frequency displacement only on steep faces. The graded
+  // terrace, the paths and the doorsteps stay exactly where the layout put
+  // them, because their slope is near zero.
+  for(let j=1;j<segments;j++)for(let i=1;i<segments;i++){
+    const k=j*row+i,h=fp.getY(k);
+    const slope=Math.hypot(fp.getY(k+1)-fp.getY(k-1),fp.getY(k+row)-fp.getY(k-row))/(2*cell);
+    const steep=smooth(slope,.45,1.35);
+    if(steep<=0)continue;
+    const x=fp.getX(k),z=fp.getZ(k);
+    const grain=Math.sin(x*61+z*43)*Math.sin(z*71-x*37)*.62+Math.sin(x*133-z*97)*.38;
+    fp.setY(k,h+steep*grain*.017);
+  }
+  floor.computeVertexNormals();
   const colors:number[]=[],sandColor=new THREE.Color('#e9d9b8'),cliffColor=new THREE.Color('#e2dfd4'),deepColor=new THREE.Color('#749892');
-  const normal=floor.attributes.normal,row=177;
+  const normal=floor.attributes.normal;
   for(let i=0;i<fp.count;i++){
     const h=fp.getY(i),n=normal.getY(i),c=new THREE.Color();
     if(h<HARBOR.water-.15)c.copy(deepColor).lerp(sandColor,smooth(h,-.50,-.12));
@@ -156,8 +172,11 @@ export function createCrescentBay(time:{value:number}){
     stone(x,crescentHeight(x,z)-size*.3,z,size,size*.75,size*.9,random()*6);
   }
   // Reef stones in the shallow lagoon, away from the boat berth.
+  // Reef stones hug the shore ring, never the middle: the lagoon is the boat's
+  // track and the fish's room, and stones there taught both of them to swim
+  // through geometry.
   for(let i=0;i<14;i++){
-    const a=random()*Math.PI*2,r=.30+random()*.34,x=CRESCENT.cx+Math.cos(a)*r,z=CRESCENT.cz+Math.sin(a)*r;
+    const a=random()*Math.PI*2,r=.54+random()*.12,x=CRESCENT.cx+Math.cos(a)*r,z=CRESCENT.cz+Math.sin(a)*r;
     if(Math.hypot(x-BERTH.x,z-BERTH.z)<.30)continue;
     const s=.035+random()*.05;
     stone(x,crescentHeight(x,z)+s*.2,z,s*1.3,s*.6,s,random()*6,'#c1c7b4');

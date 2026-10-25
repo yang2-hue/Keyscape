@@ -17,11 +17,11 @@ outputs/*
 !outputs/verification.json
 !outputs/code-review-v09/
 !outputs/code-review-v09/**
-!outputs/gallery-verify-v10/
-!outputs/gallery-verify-v10/**
-outputs/gallery-verify-v10/*.png
+!outputs/gallery-verify-v11/
+!outputs/gallery-verify-v11/**
+outputs/gallery-verify-v11/*.png
 !outputs/memory-audit-v02/
 !outputs/memory-audit-v02/**
-!outputs/crescent-acceptance-v10/
-!outputs/crescent-acceptance-v10/**
-outputs/crescent-acceptance-v10/*.png
+!outputs/crescent-acceptance-v11/
+!outputs/crescent-acceptance-v11/**
+outputs/crescent-acceptance-v11/*.png

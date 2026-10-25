@@ -4,7 +4,7 @@
  * `node --experimental-strip-types`. The renderer only damps toward these
  * numbers, so every preset is a target, never a switch. */
 
-export type WeatherKind = 'clear' | 'overcast' | 'rain' | 'mist';
+export type WeatherKind = 'clear' | 'rain' | 'mist';
 
 export type WeatherParams = {
   /** Ambient + hemisphere fill. */
@@ -25,21 +25,16 @@ export type WeatherParams = {
 
 export const WEATHERS: { id: WeatherKind; label: string; title: string }[] = [
   { id: 'clear', label: '晴', title: '晴天' },
-  { id: 'overcast', label: '阴', title: '阴天' },
-  { id: 'rain', label: '雨', title: '小雨' },
-  { id: 'mist', label: '雾', title: '海雾' },
+  { id: 'rain', label: '雨', title: '下雨' },
+  { id: 'mist', label: '雾', title: '雾' },
 ];
 
-/** Day and night are separate rows rather than a multiplier: overcast daylight
- * still needs a readable key light, while a moonlit night is mostly ambient. */
+/** Day and night are separate rows rather than a multiplier: rainy daylight
+ * still needs a readable key light, while a foggy night is mostly ambient. */
 const TABLE: Record<WeatherKind, { day: WeatherParams; night: WeatherParams }> = {
   clear: {
     day: { ambient: 0.35, ambientColor: '#fff7e9', sun: 2.0, sunColor: '#fff2d7', fill: 0.6, env: 0.35, fog: 0, fogColor: '#e9e5dc' },
     night: { ambient: 0.14, ambientColor: '#c8d6e4', sun: 0.18, sunColor: '#9fb6d6', fill: 0.17, env: 0.12, fog: 0.006, fogColor: '#1b3040' },
-  },
-  overcast: {
-    day: { ambient: 0.5, ambientColor: '#e4e9e6', sun: 0.4, sunColor: '#e8eeec', fill: 0.9, env: 0.18, fog: 0.018, fogColor: '#dde1dc' },
-    night: { ambient: 0.19, ambientColor: '#b9c6cd', sun: 0.09, sunColor: '#8fa3b3', fill: 0.26, env: 0.09, fog: 0.02, fogColor: '#1d2d36' },
   },
   rain: {
     day: { ambient: 0.52, ambientColor: '#b9cdd6', sun: 0.5, sunColor: '#c3d7de', fill: 0.8, env: 0.16, fog: 0.03, fogColor: '#b9cbcb' },

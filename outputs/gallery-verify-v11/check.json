@@ -10,13 +10,13 @@
       "pass": true,
       "detail": "月湾环抱"
     },
-    "no collection chrome left": {
+    "no import or zoom controls": {
       "pass": true
     },
-    "art direction reference is gone": {
+    "only the reset view stays in the side tools": {
       "pass": true
     },
-    "daylight leaves the lamp room unlit": {
+    "morning leaves the lamp room unlit": {
       "pass": true,
       "detail": {
         "lanternEmissive": 0,
@@ -27,14 +27,43 @@
     "clicking the lighthouse lights it by day": {
       "pass": true,
       "detail": {
-        "flash": 2.981900000005963,
-        "lantern": 0.6483179059361672
+        "flash": 3.2925000000000013,
+        "lantern": 0.696153060929505
       }
     },
-    "clicking the boat sends it on a lap": {
+    "first click sends the boat drifting": {
       "pass": true,
       "detail": {
-        "tour": 0.023076923076923078
+        "from": 0.09929355422452114,
+        "to": 0.08844586654275263,
+        "mode": "drift"
+      }
+    },
+    "fish stay inside the lagoon": {
+      "pass": true,
+      "detail": {
+        "worstRadius": 0.262,
+        "limit": 0.45
+      }
+    },
+    "fish keep water under them": {
+      "pass": true,
+      "detail": {
+        "shallowest": 0.3114,
+        "sunk": 0
+      }
+    },
+    "fish never swim through the hull": {
+      "pass": true,
+      "detail": {
+        "closest": 0.2259,
+        "limit": 0.14
+      }
+    },
+    "second click brings the boat back to the berth": {
+      "pass": true,
+      "detail": {
+        "mode": "moored"
       }
     },
     "clicking the lagoon raises a wave and scatters the fish": {
@@ -42,86 +71,81 @@
       "detail": {
         "fx": 0.66,
         "fy": 0.42,
-        "point": "1.29,0.21",
+        "point": "1.32,0.18",
         "impulses": "1",
-        "scared": "2.3415999999940396"
+        "scared": "2.293800000011921"
       }
+    },
+    "the loop holds five moments in order": {
+      "pass": true,
+      "detail": "morning-clear morning-rain evening-clear evening-mist evening-rain"
     },
     "the exhibition advances on its own": {
       "pass": true,
       "detail": {
-        "from": 1,
-        "to": 2,
+        "from": 4,
+        "to": 0,
         "dwell": 6000
       }
     },
-    "overcast: fog and lights reach the preset": {
+    "rain: fog reaches the preset": {
       "pass": true,
       "detail": {
-        "fog": 0.017552509309346227,
-        "weather": "overcast",
-        "className": "gallery  weather-overcast",
-        "state": {
-          "step": 1,
-          "weather": "overcast",
-          "night": false,
-          "dwell": 6000
-        }
-      }
-    },
-    "mist: fog and lights reach the preset": {
-      "pass": true,
-      "detail": {
-        "fog": 0.06621311592581504,
-        "weather": "mist",
-        "className": "gallery  weather-mist",
-        "state": {
-          "step": 3,
-          "weather": "mist",
-          "night": false,
-          "dwell": 6000
-        }
-      }
-    },
-    "rain: fog and lights reach the preset": {
-      "pass": true,
-      "detail": {
-        "fog": 0.033242721396678526,
-        "weather": "rain",
+        "fog": 0.032532641012824375,
+        "night": "false",
         "className": "gallery  weather-rain",
         "state": {
-          "step": 2,
+          "step": 1,
           "weather": "rain",
           "night": false,
           "dwell": 6000
         }
       }
     },
-    "fog thickens from overcast through rain to mist": {
+    "mist: fog reaches the preset": {
       "pass": true,
       "detail": {
-        "overcast": 0.017552509309346227,
-        "rain": 0.033242721396678526,
-        "mist": 0.06621311592581504
+        "fog": 0.06796343236998431,
+        "night": "true",
+        "className": "gallery night weather-mist",
+        "state": {
+          "step": 3,
+          "weather": "mist",
+          "night": true,
+          "dwell": 6000
+        }
       }
     },
-    "night lights the beacon": {
+    "fog is thicker in the misty evening than in the rain": {
       "pass": true,
       "detail": {
-        "lanternEmissive": 1.2559113752278666,
-        "searchLight": 2.7472931676383516
+        "rain": 0.032532641012824375,
+        "mist": 0.06796343236998431
       }
     },
-    "night turns the sweep beam on": {
+    "the misty preset is an evening preset": {
       "pass": true,
       "detail": {
-        "beaconStrength": 0.9175066224235173
+        "night": "true"
       }
     },
-    "daylight switches the beacon off again": {
+    "evening lights the beacon": {
       "pass": true,
       "detail": {
-        "lanternEmissive": 0.025894253438262134
+        "lanternEmissive": 1.4920410095276102,
+        "searchLight": 3.2638396401857523
+      }
+    },
+    "evening turns the sweep beam on": {
+      "pass": true,
+      "detail": {
+        "beaconStrength": 0.9325256056397093
+      }
+    },
+    "morning switches the beacon off again": {
+      "pass": true,
+      "detail": {
+        "lanternEmissive": 0.028161823473563503
       }
     },
     "playing renders continuously": {
@@ -134,12 +158,12 @@
     },
     "paused freezes animation time": {
       "pass": true,
-      "detail": "8.950000000000133"
+      "detail": "10.766666666666696"
     },
     "paused transitions still complete": {
       "pass": true,
       "detail": {
-        "fog": 0.06130922586679581
+        "fog": 0.06247645492487418
       }
     },
     "resuming restarts the loop": {
@@ -150,7 +174,7 @@
       "pass": true,
       "detail": {
         "smallest": 44,
-        "count": 3,
+        "count": 2,
         "sizes": []
       }
     },
@@ -169,55 +193,44 @@
     "splash": {
       "fx": 0.66,
       "fy": 0.42,
-      "point": "1.29,0.21",
+      "point": "1.32,0.18",
       "impulses": "1",
-      "scared": "2.3415999999940396"
+      "scared": "2.293800000011921"
     },
     "cycle": {
       "before": {
-        "step": 1,
-        "weather": "overcast",
-        "night": false,
+        "step": 4,
+        "weather": "rain",
+        "night": true,
         "dwell": 6000
       },
       "after": {
-        "step": 2,
-        "weather": "rain",
+        "step": 0,
+        "weather": "clear",
         "night": false,
         "dwell": 6000
       }
     },
     "weather": {
-      "overcast": {
-        "fog": 0.017552509309346227,
-        "weather": "overcast",
-        "className": "gallery  weather-overcast",
+      "rain": {
+        "fog": 0.032532641012824375,
+        "night": "false",
+        "className": "gallery  weather-rain",
         "state": {
           "step": 1,
-          "weather": "overcast",
+          "weather": "rain",
           "night": false,
           "dwell": 6000
         }
       },
       "mist": {
-        "fog": 0.06621311592581504,
-        "weather": "mist",
-        "className": "gallery  weather-mist",
+        "fog": 0.06796343236998431,
+        "night": "true",
+        "className": "gallery night weather-mist",
         "state": {
           "step": 3,
           "weather": "mist",
-          "night": false,
-          "dwell": 6000
-        }
-      },
-      "rain": {
-        "fog": 0.033242721396678526,
-        "weather": "rain",
-        "className": "gallery  weather-rain",
-        "state": {
-          "step": 2,
-          "weather": "rain",
-          "night": false,
+          "night": true,
           "dwell": 6000
         }
       }

@@ -2,7 +2,7 @@
  * Crescent bay product acceptance evidence (docs/crescent-product-acceptance.md).
  *
  *   node scripts/crescent-acceptance.mjs [--base=http://127.0.0.1:5173]
- *                                        [--out=outputs/crescent-acceptance-v10]
+ *                                        [--out=outputs/crescent-acceptance-v11]
  *
  * Requires a running dev server. Produces the six viewpoints the acceptance
  * document asks for (main / aerial / dock / cottage / lighthouse-entrance /
@@ -25,7 +25,7 @@ const args = new Map(process.argv.slice(2).map(a => {
   return [k, rest.join('=') || 'true'];
 }));
 const BASE = args.get('base') ?? 'http://127.0.0.1:5173';
-const OUT = args.get('out') ?? 'outputs/crescent-acceptance-v10';
+const OUT = args.get('out') ?? 'outputs/crescent-acceptance-v11';
 // Software rendering advances the scene at roughly a tenth of wall clock
 // (the wave solver caps at 6 x 1/120 s per frame), so the clip is captured over
 // a long window and re-timed to CLIP_SECONDS to match real-time appearance.
@@ -159,7 +159,7 @@ try {
   // --- 3. Night: lantern, halo and the rotating sea beam --------------------
   await page.evaluate(v => window.__galleryCamera.frame(v), pose([0, 0.30, 0], 3.9, 3.9));
   await settle(page, 2);
-  await page.evaluate(() => window.__galleryCycle.set(5));
+  await page.evaluate(() => window.__galleryCycle.set(2));
   await page.waitForFunction(() => document.querySelector('main.gallery')?.classList.contains('night'), null, { timeout: 60000 });
   await page.waitForFunction(() => Number(document.querySelector('canvas')?.dataset.beaconStrength) > 0.9, null, { timeout: 120000 });
   await settle(page, 3);
@@ -224,7 +224,7 @@ try {
   await recordPage.goto(`${BASE}/?work=crescent`, { waitUntil: 'domcontentloaded' });
   await recordPage.waitForFunction(READY, null, { timeout: 300000 });
   await recordPage.waitForFunction(() => typeof window.__galleryCamera?.frame === 'function', null, { timeout: 60000 });
-  await recordPage.evaluate(() => window.__galleryCycle.set(5));
+  await recordPage.evaluate(() => window.__galleryCycle.set(2));
   await recordPage.waitForFunction(() => document.querySelector('main.gallery')?.classList.contains('night'), null, { timeout: 60000 });
   await recordPage.waitForFunction(() => Number(document.querySelector('canvas')?.dataset.beaconStrength) > 0.9, null, { timeout: 120000 });
   const recordBox = await recordPage.locator('canvas').boundingBox();

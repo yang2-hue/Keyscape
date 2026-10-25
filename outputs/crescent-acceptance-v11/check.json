@@ -5,29 +5,29 @@
     "night mode lights the lantern and the beam": {
       "pass": true,
       "detail": {
-        "beaconStrength": "0.9380235001155615",
+        "beaconStrength": "0.9389828312788268",
         "night": "gallery night weather-clear"
       }
     },
     "lighthouse beam sweeps while playing": {
       "pass": true,
       "detail": {
-        "from": "0.496",
-        "to": "0.807",
-        "delta": "0.311"
+        "from": "0.738",
+        "to": "1.049",
+        "delta": "0.312"
       }
     },
     "pausing freezes the beam": {
       "pass": true,
       "detail": {
-        "angle": "0.854711999995709"
+        "angle": "1.0866239999914176"
       }
     },
     "pausing freezes the fish and boat": {
       "pass": true,
       "detail": {
-        "fishTailAngle": "-0.48687679430803554",
-        "boatTime": "3.3999999999999906"
+        "fishTailAngle": "0.43344532689707677",
+        "boatTime": "4.333333333333338"
       }
     },
     "resuming restarts the sweep": {
@@ -37,13 +37,13 @@
     "reduced motion stops the sweep": {
       "pass": true,
       "detail": {
-        "angle": "0.9193439999914175"
+        "angle": "1.150847999989987"
       }
     },
     "reduced motion keeps the lantern lit": {
       "pass": true,
       "detail": {
-        "beaconStrength": "0.9996893674948191"
+        "beaconStrength": "0.9996508119654639"
       }
     },
     "reduced motion disables the animation toggle": {
@@ -53,15 +53,15 @@
     "recording captured a turning beam": {
       "pass": true,
       "detail": {
-        "degrees": 93
+        "degrees": 104
       }
     },
     "recording muxed to webm": {
       "pass": true,
       "detail": {
-        "frames": 184,
-        "fps": 15,
-        "seconds": 12.27
+        "frames": 203,
+        "fps": 17,
+        "seconds": 11.94
       }
     },
     "no page errors": {
@@ -70,7 +70,7 @@
     }
   },
   "data": {
-    "loadMs": 12379,
+    "loadMs": 11055,
     "canvas": {
       "width": 1195,
       "height": 900
@@ -130,23 +130,23 @@
       }
     },
     "recording": {
-      "file": "outputs\\crescent-acceptance-v10\\lighthouse-sweep.webm",
-      "frames": 184,
-      "capturedSeconds": 118.33,
-      "captureFps": 1.55,
-      "clipSeconds": 12.27,
-      "speedFactor": 9.6,
-      "beamFrom": 0.3626160000085832,
-      "beamTo": 1.986336000001432,
-      "beamTurnDegrees": 93,
+      "file": "outputs\\crescent-acceptance-v11\\lighthouse-sweep.webm",
+      "frames": 203,
+      "capturedSeconds": 118.5,
+      "captureFps": 1.7,
+      "clipSeconds": 11.94,
+      "speedFactor": 9.9,
+      "beamFrom": 0.4106399999928476,
+      "beamTo": 2.2308719999527944,
+      "beamTurnDegrees": 104,
       "ffmpeg": "C:\\Users\\ASUS\\AppData\\Local\\ms-playwright\\ffmpeg-1013\\ffmpeg-win64.exe",
       "note": "Captured frame by frame on a software renderer, then re-timed by speedFactor so the beam sweeps at its real angular speed. Frame pacing reflects capture rate, not hardware."
     },
     "motion": {
-      "pauseFrozen": "0.854711999995709",
-      "reducedFrozen": "0.9193439999914175",
-      "sweepFrom": 0.4956719999957087,
-      "sweepTo": 0.806711999995709
+      "pauseFrozen": "1.0866239999914176",
+      "reducedFrozen": "1.150847999989987",
+      "sweepFrom": 0.7377839999914173,
+      "sweepTo": 1.0493519999885565
     }
   },
   "errors": [],
