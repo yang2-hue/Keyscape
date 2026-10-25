@@ -38,3 +38,17 @@ test('normalizes off-centre assets without overwriting authored transforms', asy
   assert.equal(model.children[0].children[0].position.x, 100);
   disposeArtwork(model);
 });
+
+test('disposes point and line geometry, materials and textures',()=>{
+  const root=new THREE.Group(),texture=new THREE.Texture();
+  const points=new THREE.Points(new THREE.BufferGeometry(),new THREE.PointsMaterial({map:texture}));
+  const line=new THREE.Line(new THREE.BufferGeometry(),new THREE.LineBasicMaterial());
+  root.add(points,line);
+  const disposed=new Set<object>();
+  for(const resource of [points.geometry,points.material,line.geometry,line.material,texture]){
+    const dispose=resource.dispose.bind(resource);
+    resource.dispose=()=>{disposed.add(resource);dispose();};
+  }
+  disposeArtwork(root);
+  assert.equal(disposed.size,5);
+});

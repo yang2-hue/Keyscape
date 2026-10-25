@@ -4,7 +4,17 @@ import { RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-export type WorkId = 'harbor' | 'grotto';
+export type WorkId = 'harbor' | 'crescent' | 'gate' | 'grotto';
+
+export function useSoftwareRenderer() {
+  const gl = useThree(state => state.gl);
+  return useMemo(() => {
+    const context = gl.getContext();
+    const info = context.getExtension('WEBGL_debug_renderer_info');
+    const renderer = info ? String(context.getParameter(info.UNMASKED_RENDERER_WEBGL)) : '';
+    return /swiftshader|llvmpipe|software/i.test(renderer);
+  }, [gl]);
+}
 
 function random(seed: number) {
   let value = seed;
@@ -68,6 +78,10 @@ const waterVertex = `
 const waterFragment = `
   uniform float time;
   uniform float dusk;
+  uniform float rain;
+  uniform float waterLevel;
+  uniform float hasHeight;
+  uniform sampler2D heights;
   varying vec3 vPoint;
   void main() {
     vec2 p = vPoint.xy;
@@ -76,25 +90,34 @@ const waterFragment = `
     float lace = pow(max(0.0, a * b), 9.0);
     float glint = pow(max(0.0, sin(p.x * 43.0 + p.y * 18.0 + time) * cos(p.y * 50.0)), 22.0);
     vec3 blue = mix(vec3(0.045, 0.47, 0.52), vec3(0.035, 0.20, 0.29), dusk);
-    vec3 color = mix(blue, vec3(0.82, 0.97, 0.88), lace * 0.8 + glint * 0.7);
-    gl_FragColor = vec4(color, 0.12 + lace * 0.29 + glint * 0.3);
+    float foam = 0.0;
+    if (hasHeight > 0.5) {
+      float floorHeight = texture2D(heights, vec2(p.x / 3.2 + 0.5, -p.y / 3.2 + 0.5)).r;
+      float depth = waterLevel - floorHeight;
+      foam = smoothstep(0.0, 0.025, depth) * (1.0 - smoothstep(0.025, 0.09, depth)) * (0.35 + lace * 0.65);
+    }
+    blue = mix(blue, vec3(0.09, 0.28, 0.32), rain * 0.5);
+    vec3 color = mix(blue, vec3(0.82, 0.97, 0.88), min(1.0, lace * 0.65 + glint * 0.5 + foam * 0.75));
+    gl_FragColor = vec4(color, 0.17 + lace * 0.2 + glint * 0.2 + foam * 0.4);
   }
 `;
 
-function Sea({ playing, evening }: { playing: boolean; evening: boolean }) {
+export function Sea({ playing, evening, rainy = false, level = 0.503, depth = 0.95, size = 3.19, heightTexture }: { playing: boolean; evening: boolean; rainy?: boolean; level?: number; depth?: number; size?: number; heightTexture?: THREE.DataTexture }) {
+  const software = useSoftwareRenderer();
   const shader = useRef<THREE.ShaderMaterial>(null);
-  const uniforms = useMemo(() => ({ time: { value: 0 }, dusk: { value: 0 } }), []);
+  const uniforms = useMemo(() => ({ time: { value: 0 }, dusk: { value: 0 }, rain: { value: 0 }, heights: { value: heightTexture ?? null }, hasHeight: { value: heightTexture ? 1 : 0 }, waterLevel: { value: level } }), [heightTexture, level]);
   useFrame((_, dt) => {
     if (!shader.current) return;
     if (playing) uniforms.time.value += Math.min(dt, 0.05);
     uniforms.dusk.value = THREE.MathUtils.damp(uniforms.dusk.value, evening ? 1 : 0, 3, dt);
+    uniforms.rain.value = THREE.MathUtils.damp(uniforms.rain.value, rainy ? 1 : 0, 3, dt);
   });
   return <group>
-    <RoundedBox args={[3.19, 0.95, 3.19]} radius={0.085} smoothness={4} position={[0, 0.015, 0]} renderOrder={2}>
-      <meshPhysicalMaterial color="#128294" transparent opacity={0.65} roughness={0.1} transmission={0.7} thickness={1.1} attenuationColor="#398b93" attenuationDistance={3.8} ior={1.333} depthWrite={false} envMapIntensity={0.65} />
+    <RoundedBox args={[size, depth, size]} radius={0.08} smoothness={4} position={[0, level - depth / 2, 0]} renderOrder={2}>
+      <meshPhysicalMaterial color="#14899a" transparent opacity={0.44} roughness={0.1} transmission={software ? 0 : 0.7} thickness={0.65} attenuationColor="#398b93" attenuationDistance={3.8} ior={1.333} depthWrite={false} envMapIntensity={0.65} />
     </RoundedBox>
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.503, 0]} renderOrder={3}>
-      <planeGeometry args={[3.12, 3.12, 64, 64]} />
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, level + 0.006, 0]} renderOrder={3}>
+      <planeGeometry args={[size - 0.035, size - 0.035, 64, 64]} />
       <shaderMaterial ref={shader} vertexShader={waterVertex} fragmentShader={waterFragment} uniforms={uniforms} transparent depthWrite={false} side={THREE.DoubleSide} />
     </mesh>
   </group>;

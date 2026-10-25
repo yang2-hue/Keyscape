@@ -1,0 +1,33 @@
+{
+  "provider": "Aholo Lux3D",
+  "models": [
+    {
+      "file": "terrain.glb",
+      "taskId": "4333141",
+      "region": "cn",
+      "sha256": "e5c08aac1a13f7a6f549db141b21ee6ceff970ecb7319223ea5b0e81d9d946ee",
+      "bytes": 14746592
+    },
+    {
+      "file": "boat.glb",
+      "taskId": "4333144",
+      "region": "cn",
+      "sha256": "fa6bf38dc1ecbe81404b9b502500c2f0b07c976174d17105ab876696f03771ca",
+      "bytes": 6938352
+    },
+    {
+      "file": "fish.glb",
+      "taskId": "4333148",
+      "region": "cn",
+      "sha256": "35e44b6f9220854d52b6fe219c11433b4be6b4d2d7da003a02df5b4d74ab0167",
+      "bytes": 4593788
+    }
+  ],
+  "notes": "Original GLBs preserved. The website creates derivative terrain geometry, repairs simple open boundaries, replaces architecture locally and animates independent boat/fish assets.",
+  "webDerivation": [
+    "src/harbor-art.ts",
+    "src/mesh-repair.ts",
+    "src/HarborArchitecture.tsx",
+    "src/HarborWater.tsx"
+  ]
+}

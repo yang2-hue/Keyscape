@@ -48,7 +48,7 @@ export async function loadArtwork(file: File): Promise<THREE.Group> {
 export function disposeArtwork(root: THREE.Object3D) {
   const resources = new Set<{ dispose(): void }>();
   root.traverse(child => {
-    if (!(child instanceof THREE.Mesh)) return;
+    if (!(child instanceof THREE.Mesh) && !(child instanceof THREE.Points) && !(child instanceof THREE.Line)) return;
     resources.add(child.geometry);
     for (const material of Array.isArray(child.material) ? child.material : [child.material]) {
       resources.add(material);
