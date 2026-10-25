@@ -148,18 +148,23 @@ try {
   await page.mouse.click(boatAt[0], boatAt[1]);
   const drifting = await waitForText(page, 'boatMode', 'drift', 30000);
   const startX = Number((await dataset(page)).boatX);
-  await page.waitForTimeout(4000);
+  // The drift eases out of the berth, and the software renderer advances the
+  // scene at a tenth of wall clock, so wait for the hull to actually move
+  // instead of sampling after a fixed sleep.
+  const moved = await page.waitForFunction(start => Math.abs(Number(document.querySelector('canvas')?.dataset.boatX) - start) > 0.015, startX, { timeout: 180000, polling: 200 }).then(() => true).catch(() => false);
   const movedX = Number((await dataset(page)).boatX);
-  check('first click sends the boat drifting', drifting && Number.isFinite(movedX) && Math.abs(movedX - startX) > 0.004, { from: startX, to: movedX, mode: (await dataset(page)).boatMode });
+  check('first click sends the boat drifting', drifting && moved, { from: startX, to: movedX, mode: (await dataset(page)).boatMode });
   await page.screenshot({ path: path.join(OUT, 'boat-drifting.png') });
 
   // While it drifts, sample the fish: none may leave the lagoon, sink into the
   // bed, or pass through the hull.
-  const audits = [];
+  const audits = [], clearances = [];
   for (let i = 0; i < 5; i++) {
     audits.push(await page.evaluate(() => window.__galleryLandmarks.audit()));
+    clearances.push(await page.evaluate(() => window.__galleryLandmarks.boatClearance()));
     await page.waitForTimeout(2500);
   }
+  check('the drifting hull never touches land or the pier', Math.min(...clearances) > 0, { min: Math.min(...clearances), samples: clearances });
   const fish = audits.flat();
   const worstRadius = Math.max(...fish.map(f => f.radius));
   const shallowest = Math.min(...fish.map(f => f.depth));

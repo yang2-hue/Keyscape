@@ -5,6 +5,9 @@ import { HARBOR,roundedSquarePoint,keycapOutline } from './harbor-layout.ts';
 import { COTTAGES,TOWER,TERRACE,MAIN_PATH,HOUSE_PATHS,SHORE_STAIRS,islandPoint,gradeAccessTerrain,keepAccessClear,stairTreads,nearestOnSegment } from './crescent-access.ts';
 
 type V=[number,number,number];
+/** Module-level polar helper: the dock footprint is derived at load time, before
+ * the study factory runs. */
+const polar=(angle:number,radius:number):[number,number,number]=>[CRESCENT.cx+Math.cos(angle)*radius,0,CRESCENT.cz+Math.sin(angle)*radius];
 type Piece={position:V;scale:V;rotation?:V;color?:string};
 const smooth=THREE.MathUtils.smoothstep;
 
@@ -19,8 +22,23 @@ export function bayFootprint(){
  * which the HARBOR.rotation display turn shows front-right). The opening must
  * never close into an O. */
 export const CRESCENT={cx:-0.22,cz:0.06,rIn:0.70,rOut:1.30,openAt:Math.PI/2,openLo:0.55,openHi:1.25};
-/** Boat berth at the finger-dock landing, clear of the reef ring. */
-export const BERTH={x:0.10,z:-0.22,heading:.03};
+/** Boat berth beside the finger-dock head: far enough from the planks that the
+ * hull never overlaps them, still inside the lagoon. Verified against the dock
+ * footprint and the seabed (see `DOCK`). */
+export const BERTH={x:0.09,z:0.32,heading:2.40};
+/** Finger dock footprint (walkway + T platform) in study XZ, used by the boat's
+ * clearance guard. Kept next to the geometry that builds it. */
+export const PIER_HEAD=CRESCENT.rIn-.26;
+export const PIER_ANGLE=-1.55;
+export const DOCK=(()=>{
+  const jettyA=PIER_ANGLE,headR=PIER_HEAD,platW=.46,platD=.19;
+  const head=polar(jettyA,headR),shore=polar(jettyA,CRESCENT.rIn-.01);
+  const box=(x0:number,x1:number,z0:number,z1:number)=>({x0,x1,z0,z1});
+  return [
+    box(Math.min(shore[0],head[0])-.09,Math.max(shore[0],head[0])+.09,Math.min(shore[2],head[2])-.09,Math.max(shore[2],head[2])+.09),
+    box(head[0]-platW/2,head[0]+platW/2,head[2]-platD/2,head[2]+platD/2),
+  ];
+})();
 
 /** The beacon is a visual effect, never a solid obstacle in the water field. */
 export function createLighthouseBeam(){
@@ -120,7 +138,6 @@ export function createCrescentBay(time:{value:number}){
     geometries.add(geometry);const object=new THREE.Mesh(geometry,material);object.position.fromArray(position);object.castShadow=object.receiveShadow=true;parent.add(object);return object;
   };
   const random=seeded(8209);
-  const polar=(angle:number,radius:number):V=>[CRESCENT.cx+Math.cos(angle)*radius,0,CRESCENT.cz+Math.sin(angle)*radius];
   // Continuous lagoon/sea bed and island share one height function.
   // 176 cells across 3.14 units is 1.8 cm per cell: cliffs stop reading as a
   // staircase of flat quads when the camera comes close.
@@ -324,9 +341,9 @@ export function createCrescentBay(time:{value:number}){
   // Landing: shore steps down to a walkway, ending in a T-shaped finger dock
   // with mooring posts, a rope coil and a gull — a place people can actually
   // walk onto and tie a boat to, not a floating dead platform.
-  const jettyA=-1.55,deckY=HARBOR.water+.05;
+  const jettyA=PIER_ANGLE,deckY=HARBOR.water+.05;
   {
-    const [sx,,sz]=polar(jettyA,CRESCENT.rIn-.01),[ex,,ez]=polar(jettyA,CRESCENT.rIn-.42);
+    const [sx,,sz]=polar(jettyA,CRESCENT.rIn-.01),[ex,,ez]=polar(jettyA,PIER_HEAD);
     const axis=Math.atan2(ez-sz,ex-sx),planks=11;
     for(let i=0;i<planks;i++){
       const u=i/(planks-1),x=sx+(ex-sx)*u,z=sz+(ez-sz)*u;
@@ -483,7 +500,7 @@ export function createCrescentBay(time:{value:number}){
   }
   // Anchored lagoon boat: smooth lofted hull with a painted waterline band
   // and warm red bottom (reference-style finishing), furled sail and rigging.
-  const boat=new THREE.Group();boat.name='CrescentBoat';boat.scale.setScalar(1.05);
+  const boat=new THREE.Group();boat.name='CrescentBoat';boat.scale.setScalar(.85);
   const hp:number[]=[],hi:number[]=[],hc:number[]=[],HS=20,HC=20;
   const hullW=(t:number)=>.105*Math.pow(Math.sin(Math.PI*Math.max(.02,Math.min(.98,t))),.5)*(1+.18*t);
   const hullD=(t:number)=>.96*Math.pow(Math.sin(Math.PI*Math.max(.02,Math.min(.98,t))),.35)+.04;

@@ -19,7 +19,7 @@ pnpm install
 pnpm dev              # http://127.0.0.1:5173/
 pnpm build            # tsc -b + vite build
 pnpm test             # 19 项单元测试（node --experimental-strip-types --test）
-pnpm verify           # 29 项浏览器检查（需先跑 pnpm dev），产出 outputs/gallery-verify-v11/
+pnpm verify           # 30 项浏览器检查（需先跑 pnpm dev），产出 outputs/gallery-verify-v11/
 pnpm accept:crescent  # 月湾逐项验收：6 张视角截图 + 扫光录屏 + check.json（约 5 分钟）
 ```
 
@@ -70,7 +70,7 @@ React、TypeScript、Vite、Three.js、React Three Fiber、Drei、@react-three/p
 
 - `tsc -b` 0 错误；`pnpm test` 19/19 通过；`vite build` 通过。
 - 生产包按库拆分为 `three`(705 kB) / `three-fiber`(423 kB) / `three-post`(89 kB) / 应用(73 kB)，`dist` 合计约 1.3 MB。three 单块仍 >500 kB，属库本体体积。
-- `pnpm verify` 29 项浏览器检查：标题与文案、导入与拉近按钮已移除、白天灯塔不发光、点灯塔亮起、鱼群不出界／不沉底／不穿船、小船一次漂流两次复位、点水面起波并惊鱼、五个时刻的顺序与自动推进、雾与雨的浓度、晚上点亮与早上熄灭、暂停后 0 帧与过渡仍完成、移动端 44 px 点击区、无页面错误。
+- `pnpm verify` 30 项浏览器检查：标题与文案、导入与拉近按钮已移除、白天灯塔不发光、点灯塔亮起、鱼群不出界／不沉底／不穿船、小船漂流时船体间隙始终为正、一次漂流两次复位、点水面起波并惊鱼、五个时刻的顺序与自动推进、雾与雨的浓度、晚上点亮与早上熄灭、暂停后 0 帧与过渡仍完成、移动端 44 px 点击区、无页面错误。
 - 检查环境是 Chrome / SwiftShader（约 2–3 fps），不能代表真实手机或硬件帧率。正式发布前需真机测试。
 - 月湾的逐项对照见 `outputs/crescent-acceptance-v11/README.md`：码头过渡、灯塔入口、夜间扫光通过；台地与入户通路的**铺装辨识度**、夜景光束强度仍待美术判定。
 - Draco / KTX2 需额外解码器，当前不支持；程序化场景未导出为独立 GLB；项目仅在本地运行，未发布。

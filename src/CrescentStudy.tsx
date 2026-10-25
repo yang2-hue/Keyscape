@@ -1,8 +1,8 @@
 import {useCallback,useEffect,useMemo,useRef} from 'react';
 import {useFrame,useThree,type ThreeEvent} from '@react-three/fiber';
 import * as THREE from 'three';
-import {createCrescentBay,BERTH,CRESCENT} from './crescent-bay';
-import {buildHeightfield,HARBOR} from './harbor-layout';
+import {createCrescentBay,BERTH,CRESCENT,DOCK} from './crescent-bay';
+import {buildHeightfield,HARBOR,type Heightfield} from './harbor-layout';
 import {createWaterDynamics} from './water-dynamics';
 import {deformFish,fishBend,stepSpring,turnToward} from './scene-motion';
 import HarborWater from './HarborWater';
@@ -15,14 +15,19 @@ const SWELL_DIR:[number,number]=[.28,-.96];
 
 /** Seconds the lighthouse stays lit after a click. */
 const FLASH_SECONDS=3.6;
-/** One slow lap of the lagoon, and how long it takes to come home again. */
-const LAP_SECONDS=26;
 const RETURN_SECONDS=2.6;
-/** Radius the boat circles at. The hull is 0.11 wide, so it sweeps 0.29 at
- * most: well inside the lagoon, and the reef stones start at 0.52. */
-const BOAT_RADIUS=.18;
+/** Drift path: a slow glide from the berth to the open north-east basin and
+ * back, on a sine so it eases at both ends. A closed circle does not fit — the
+ * pier reaches far enough into the lagoon that any lap crosses the planks. */
+const DRIFT_TO={x:-.16,z:.00};
+const DRIFT_PERIOD=34;
+/** Hull extents at the current boat scale (0.85): 0.53 x 0.18. */
+const HULL_HALF_LENGTH=.265;
+const HULL_HALF_WIDTH=.09;
+/** Sampled points on the hull used by the clearance guard. */
+const HULL_POINTS:[number,number][]=[[1,1],[1,-1],[-1,1],[-1,-1],[0,0],[1,0],[-1,0]];
 /** Fish stay inside this radius and need this much water under them. */
-const FISH_RADIUS=.42;
+const FISH_RADIUS=.40;
 const FISH_MIN_DEPTH=.16;
 /** Minimum clearance between a fish and the hull. */
 const FISH_BOAT_CLEARANCE=.17;
@@ -39,6 +44,23 @@ function landmarkOf(object:THREE.Object3D):Landmark{
     node=node.parent;
   }
   return '';
+}
+
+/** Smallest of: water under the hull, distance to the dock planks. Negative means
+ * the hull is already inside land or timber. */
+function hullClearance(x:number,z:number,heading:number,field:Heightfield){
+  const fwd=[Math.sin(heading),Math.cos(heading)],side=[Math.cos(heading),-Math.sin(heading)];
+  let min=Infinity;
+  for(const [a,b] of HULL_POINTS){
+    const px=x+fwd[0]*HULL_HALF_LENGTH*a+side[0]*HULL_HALF_WIDTH*b;
+    const pz=z+fwd[1]*HULL_HALF_LENGTH*a+side[1]*HULL_HALF_WIDTH*b;
+    min=Math.min(min,HARBOR.water-field.sample(px,pz));
+    for(const box of DOCK){
+      const dx=Math.max(box.x0-px,0,px-box.x1),dz=Math.max(box.z0-pz,0,pz-box.z1);
+      min=Math.min(min,Math.hypot(dx,dz));
+    }
+  }
+  return min;
 }
 
 const lerpAngle=(a:number,b:number,t:number)=>a+Math.atan2(Math.sin(b-a),Math.cos(b-a))*t;
@@ -65,6 +87,18 @@ export default function CrescentStudy({playing,night,weather}:{playing:boolean;n
   const returning=useRef(0);
   const returnFrom=useRef({x:BERTH.x,z:BERTH.z,heading:BERTH.heading});
   const pose=useRef({x:BERTH.x,z:BERTH.z,heading:BERTH.heading});
+  // Smoothed drift position: the guard may pull the guide point inward, and the
+  // hull follows it with a damp so the correction never snaps.
+  const drift=useRef({x:BERTH.x,z:BERTH.z});
+  // A click target for the boat. The hull sits half under the water surface, so
+  // a click on the waterline hits the sea first and the boat never sees it.
+  // This invisible box rides with the boat and catches the tap.
+  const hitProxy=useMemo(()=>{
+    const mesh=new THREE.Mesh(new THREE.BoxGeometry(.26,.28,.62),new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false}));
+    mesh.name='CrescentBoat';
+    return mesh;
+  },[]);
+  useEffect(()=>()=>{hitProxy.geometry.dispose();(hitProxy.material as THREE.Material).dispose();},[hitProxy]);
   const rainy=isWet(weather);
   useEffect(()=>{dynamics.initialize();return()=>dynamics.dispose();},[dynamics]);
   useEffect(()=>()=>study.dispose(),[study]);
@@ -100,6 +134,27 @@ export default function CrescentStudy({playing,night,weather}:{playing:boolean;n
           };
         });
       },
+      /** Clearance for an arbitrary pose, used to pick the berth from the real
+       * runtime heightfield (which already includes the pier planks). */
+      scoreAt(x:number,z:number,h:number){return Number(hullClearance(x,z,h,field).toFixed(4));},
+      /** Clearance of the hull at its current pose: negative means clipping. */
+      boatClearance(){return Number(hullClearance(pose.current.x,pose.current.z,pose.current.heading,field).toFixed(4));},
+      /** Worst hull sample for debugging: where and why. */
+      boatWorst(){
+        const x=pose.current.x,z=pose.current.z,heading=pose.current.heading;
+        const fwd=[Math.sin(heading),Math.cos(heading)],side=[Math.cos(heading),-Math.sin(heading)];
+        let worst={value:9,px:0,pz:0,depth:0,dock:0};
+        for(const [a,b] of HULL_POINTS){
+          const px=x+fwd[0]*HULL_HALF_LENGTH*a+side[0]*HULL_HALF_WIDTH*b;
+          const pz=z+fwd[1]*HULL_HALF_LENGTH*a+side[1]*HULL_HALF_WIDTH*b;
+          const depth=HARBOR.water-field.sample(px,pz);
+          let dock=9;
+          for(const box of DOCK){const dx=Math.max(box.x0-px,0,px-box.x1),dz=Math.max(box.z0-pz,0,pz-box.z1);dock=Math.min(dock,Math.hypot(dx,dz));}
+          const value=Math.min(depth,dock);
+          if(value<worst.value)worst={value:+value.toFixed(3),px:+px.toFixed(3),pz:+pz.toFixed(3),depth:+depth.toFixed(3),dock:+dock.toFixed(3)};
+        }
+        return {...worst,x:+x.toFixed(3),z:+z.toFixed(3)};
+      },
       /** Where a landmark currently sits in CSS pixels, so a test can click the
        * real thing instead of hunting through the frame. */
       screen(){
@@ -118,7 +173,7 @@ export default function CrescentStudy({playing,night,weather}:{playing:boolean;n
       },
     };
     return ()=>{delete debug.__galleryLandmarks;};
-  },[study,camera,gl]);
+  },[study,camera,gl,field]);
 
   function pointLandmark(event:ThreeEvent<MouseEvent>):Landmark{
     const role=landmarkOf(event.object);
@@ -126,7 +181,7 @@ export default function CrescentStudy({playing,night,weather}:{playing:boolean;n
     if(role==='Lighthouse')flash.current=FLASH_SECONDS;
     else if(role==='CrescentBoat'){
       // First click: drift. Second click: come home and moor again.
-      if(boatMode.current==='moored'){boatMode.current='drift';lap.current=0;}
+      if(boatMode.current==='moored'){boatMode.current='drift';lap.current=0;drift.current={x:pose.current.x,z:pose.current.z};}
       else{boatMode.current='return';returning.current=0;returnFrom.current={...pose.current};}
     }else{
       // Fish bolt away from the exact spot that was tapped, in study space.
@@ -176,15 +231,23 @@ export default function CrescentStudy({playing,night,weather}:{playing:boolean;n
     let bx=BERTH.x,bz=BERTH.z,bh=heading;
     if(boatMode.current==='drift'){
       if(playing){
-        lap.current+=delta/LAP_SECONDS;
+        lap.current+=delta/DRIFT_PERIOD;
         if(lap.current>=1)lap.current-=1;
       }
-      const p=lap.current,angle=-Math.PI/2+p*Math.PI*2;
-      const cx=CRESCENT.cx+Math.cos(angle)*BOAT_RADIUS,cz=CRESCENT.cz+Math.sin(angle)*BOAT_RADIUS;
-      // Ease out of the berth on the first metres instead of snapping to the circle.
-      const w=THREE.MathUtils.smoothstep(p,0,.07);
-      bx=THREE.MathUtils.lerp(BERTH.x,cx,w);bz=THREE.MathUtils.lerp(BERTH.z,cz,w);
-      bh=lerpAngle(heading,angle+Math.PI/2,w);
+      // 0 at the berth, 1 at the far end, eased at both turns.
+      const p=lap.current;
+      const w=.5-.5*Math.cos(p*Math.PI*2);
+      let gx=THREE.MathUtils.lerp(BERTH.x,DRIFT_TO.x,w),gz=THREE.MathUtils.lerp(BERTH.z,DRIFT_TO.z,w);
+      // Clearance guard: pull the guide back toward the berth (a pose already
+      // known to be clear) until the whole hull is off the planks and the shore.
+      for(let guard=0;guard<16&&hullClearance(gx,gz,bh,field)<.05;guard++){
+        gx=THREE.MathUtils.lerp(gx,BERTH.x,.14);
+        gz=THREE.MathUtils.lerp(gz,BERTH.z,.14);
+      }
+      // No damping here on purpose: the guard's output is already continuous,
+      // and a lagging hull could sit inside the pier for a second or two.
+      drift.current.x=gx;drift.current.z=gz;
+      bx=gx;bz=gz;
     }else if(boatMode.current==='return'){
       if(playing)returning.current=Math.min(1,returning.current+delta/RETURN_SECONDS);
       const e=THREE.MathUtils.smoothstep(returning.current,0,1);
@@ -196,6 +259,8 @@ export default function CrescentStudy({playing,night,weather}:{playing:boolean;n
     pose.current={x:bx,z:bz,heading:bh};
     study.boat.position.set(bx,boat.current.heave.position,bz);
     study.boat.rotation.set(boat.current.pitch.position,bh,boat.current.roll.position);
+    hitProxy.position.set(bx,boat.current.heave.position+.07,bz);
+    hitProxy.rotation.y=bh;
     study.boat.userData.motionTime=t;
     study.fish.children.forEach((fish,i)=>{
       const phase=i*1.47,effort=.9+i*.045;
@@ -223,26 +288,45 @@ export default function CrescentStudy({playing,night,weather}:{playing:boolean;n
         fish.rotation.y=turnToward(previous,Math.atan2(-vz,vx),delta);
         st.turn=THREE.MathUtils.clamp(Math.atan2(Math.sin(fish.rotation.y-previous),Math.cos(fish.rotation.y-previous))/Math.max(delta,.001),-.9,.9);
       }
-      // Hard bounds, applied every frame: steering alone let a startled fish
-      // overshoot the reef and end up swimming through the island.
+      // Soft bounds: steer away from the shore and ease the position back, so a
+      // fish grazing a rock slides along it instead of twitching in and out.
       const dx=st.x-CRESCENT.cx,dz=st.z-CRESCENT.cz,dist=Math.hypot(dx,dz);
       const bed=field.sample(st.x,st.z);
-      const outside=dist>FISH_RADIUS,tooShallow=bed>HARBOR.water-FISH_MIN_DEPTH;
-      if(outside||tooShallow){
-        const target=outside?FISH_RADIUS*.97:Math.min(dist,FISH_RADIUS*.97);
-        const k=dist>1e-4?target/dist:0;
-        st.x=CRESCENT.cx+dx*k;st.z=CRESCENT.cz+dz*k;
-        st.heading=Math.atan2(CRESCENT.cz-st.z,CRESCENT.cx-st.x);
+      const tooShallow=bed>HARBOR.water-FISH_MIN_DEPTH;
+      const tooFar=dist>FISH_RADIUS;
+      if(tooShallow||tooFar){
+        // Deepest direction from the local bed gradient, or straight inward.
+        let ex:number,ez:number;
+        if(tooShallow){
+          const gx=field.sample(st.x+.035,st.z)-field.sample(st.x-.035,st.z);
+          const gz=field.sample(st.x,st.z+.035)-field.sample(st.x,st.z-.035);
+          const len=Math.hypot(gx,gz);
+          if(len>1e-5){ex=-gx/len;ez=-gz/len;}else{ex=CRESCENT.cx-st.x;ez=CRESCENT.cz-st.z;}
+        }else{ex=CRESCENT.cx-st.x;ez=CRESCENT.cz-st.z;}
+        const len=Math.hypot(ex,ez)||1;
+        if(playing){st.heading=turnToward(st.heading,Math.atan2(ez/len,ex/len),delta*4);}
+        // Gentle positional correction proportional to how far out it is.
+        const excess=Math.max(0,dist-FISH_RADIUS)+Math.max(0,(HARBOR.water-FISH_MIN_DEPTH)-bed);
+        const push=Math.min(.02,excess*.5)*delta*10;
+        st.x+=(ex/len)*push;st.z+=(ez/len)*push;
+        // Emergency only: anything this far out would be visible as a fish on land.
+        if(dist>FISH_RADIUS+.08||bed>HARBOR.water-.05){
+          const k=(FISH_RADIUS*.96)/Math.max(dist,1e-4);
+          st.x=CRESCENT.cx+dx*k;st.z=CRESCENT.cz+dz*k;
+        }
       }
       // Never swim through the hull while it is drifting.
       const bdx=st.x-bx,bdz=st.z-bz,bd=Math.hypot(bdx,bdz);
       if(bd<FISH_BOAT_CLEARANCE){
-        const k=(FISH_BOAT_CLEARANCE+.005)/Math.max(bd,1e-4);
+        const k=(FISH_BOAT_CLEARANCE+.004)/Math.max(bd,1e-4);
         st.x=bx+bdx*k;st.z=bz+bdz*k;
         st.heading=Math.atan2(st.z-bz,st.x-bx);
       }
+      // Vertical: stay above the bed and below the surface, damped so it never pops.
       const seabed=field.sample(st.x,st.z);
-      fish.position.set(st.x,Math.min(HARBOR.water-.05,Math.max(seabed+.055,HARBOR.water-.13-(i%2)*.03+Math.sin(t*.65+phase)*.012)),st.z);
+      const targetY=Math.min(HARBOR.water-.05,Math.max(seabed+.055,HARBOR.water-.13-(i%2)*.03+Math.sin(t*.65+phase)*.012));
+      st.y=st.y===undefined?targetY:THREE.MathUtils.damp(st.y,targetY,8,delta);
+      fish.position.set(st.x,st.y,st.z);
       fish.rotation.x=st.turn*.10;fish.rotation.z=Math.cos(t*.65+phase)*.035;
       const actor=study.fishActors[i];
       if(playing||!actor.body.userData.posed){
@@ -268,7 +352,7 @@ export default function CrescentStudy({playing,night,weather}:{playing:boolean;n
     study.searchLight.intensity=THREE.MathUtils.damp(study.searchLight.intensity,night?3.5:pulse*3.5,3,delta);
     if(import.meta.env.DEV){
       const d=gl.domElement.dataset;d.beaconAngle=String(study.beacon.rotation.y);d.beaconStrength=String(study.beamMaterial.uniforms.strength.value);d.lanternEmissive=String(study.lanternMaterial.emissiveIntensity);d.searchLightIntensity=String(study.searchLight.intensity);
-      d.flash=String(flash.current);d.boatMode=boatMode.current;d.boatX=String(bx);d.boatZ=String(bz);d.fishScared=String(startle.current);
+      d.flash=String(flash.current);d.boatMode=boatMode.current;d.boatX=String(bx);d.boatZ=String(bz);d.boatClearance=String(hullClearance(bx,bz,bh,field).toFixed(4));d.fishScared=String(startle.current);
       d.boatTime=String(t);d.fishTime=String(t);d.fishCount='4';d.study='procedural-crescent-v09';d.cameraKind=camera.type;d.cameraZoom=camera instanceof THREE.OrthographicCamera?String(camera.zoom):'perspective';
       d.waterHeight=String(dynamics.probe.height);d.waterSlope=String(dynamics.probe.slopeX);d.waveSteps=String(dynamics.steps);d.waveReads=String(dynamics.reads);d.waveErrors=String(d.readErrors);d.waveImpulses=String(dynamics.impulses);
       d.boatHeave=String(study.boat.position.y);d.boatPitch=String(study.boat.rotation.x);d.fishTailAngle=String(study.fishActors[0].tail.rotation.y);d.fishBend=String(study.fishActors[0].body.userData.bend??0);
@@ -280,6 +364,7 @@ export default function CrescentStudy({playing,night,weather}:{playing:boolean;n
         same handlers: without them a click on the hull never reaches the scene. */}
     <primitive object={study.boat} dispose={null} onClick={onClick} onPointerMove={onMove} onPointerOut={onOut}/>
     <primitive object={study.fish} dispose={null} onClick={onClick} onPointerMove={onMove} onPointerOut={onOut}/>
+    <primitive object={hitProxy} onClick={onClick} onPointerMove={onMove} onPointerOut={onOut}/>
     <HarborWater field={field} footprint={study.footprint} playing={playing} evening={night} rainy={rainy} dynamics={dynamics} deepTint={1} swellAmp={.016} swellDir={SWELL_DIR} onSplash={scare}/>
     <Weather field={field} playing={playing} rainy={rainy}/>
   </group>;

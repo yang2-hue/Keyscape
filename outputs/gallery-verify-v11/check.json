@@ -27,36 +27,49 @@
     "clicking the lighthouse lights it by day": {
       "pass": true,
       "detail": {
-        "flash": 3.2925000000000013,
-        "lantern": 0.696153060929505
+        "flash": 3.344500000000001,
+        "lantern": 0.5435600140318331
       }
     },
     "first click sends the boat drifting": {
       "pass": true,
       "detail": {
-        "from": 0.09929355422452114,
-        "to": 0.08844586654275263,
+        "from": 0.08997865630725659,
+        "to": 0.07401343182140059,
         "mode": "drift"
+      }
+    },
+    "the drifting hull never touches land or the pier": {
+      "pass": true,
+      "detail": {
+        "min": 0.0935,
+        "samples": [
+          0.0935,
+          0.0935,
+          0.0935,
+          0.1219,
+          0.1219
+        ]
       }
     },
     "fish stay inside the lagoon": {
       "pass": true,
       "detail": {
-        "worstRadius": 0.262,
+        "worstRadius": 0.2357,
         "limit": 0.45
       }
     },
     "fish keep water under them": {
       "pass": true,
       "detail": {
-        "shallowest": 0.3114,
+        "shallowest": 0.3181,
         "sunk": 0
       }
     },
     "fish never swim through the hull": {
       "pass": true,
       "detail": {
-        "closest": 0.2259,
+        "closest": 0.236,
         "limit": 0.14
       }
     },
@@ -73,7 +86,7 @@
         "fy": 0.42,
         "point": "1.32,0.18",
         "impulses": "1",
-        "scared": "2.293800000011921"
+        "scared": "2.35"
       }
     },
     "the loop holds five moments in order": {
@@ -83,15 +96,15 @@
     "the exhibition advances on its own": {
       "pass": true,
       "detail": {
-        "from": 4,
-        "to": 0,
+        "from": 1,
+        "to": 2,
         "dwell": 6000
       }
     },
     "rain: fog reaches the preset": {
       "pass": true,
       "detail": {
-        "fog": 0.032532641012824375,
+        "fog": 0.02657864627894583,
         "night": "false",
         "className": "gallery  weather-rain",
         "state": {
@@ -105,7 +118,7 @@
     "mist: fog reaches the preset": {
       "pass": true,
       "detail": {
-        "fog": 0.06796343236998431,
+        "fog": 0.06720669031398321,
         "night": "true",
         "className": "gallery night weather-mist",
         "state": {
@@ -119,8 +132,8 @@
     "fog is thicker in the misty evening than in the rain": {
       "pass": true,
       "detail": {
-        "rain": 0.032532641012824375,
-        "mist": 0.06796343236998431
+        "rain": 0.02657864627894583,
+        "mist": 0.06720669031398321
       }
     },
     "the misty preset is an evening preset": {
@@ -132,25 +145,25 @@
     "evening lights the beacon": {
       "pass": true,
       "detail": {
-        "lanternEmissive": 1.4920410095276102,
-        "searchLight": 3.2638396401857523
+        "lanternEmissive": 1.3990876996889583,
+        "searchLight": 3.0605043430251566
       }
     },
     "evening turns the sweep beam on": {
       "pass": true,
       "detail": {
-        "beaconStrength": 0.9325256056397093
+        "beaconStrength": 0.9069753169693364
       }
     },
     "morning switches the beacon off again": {
       "pass": true,
       "detail": {
-        "lanternEmissive": 0.028161823473563503
+        "lanternEmissive": 0.02939782559377341
       }
     },
     "playing renders continuously": {
       "pass": true,
-      "detail": "3 frames in 2.5s (software renderer)"
+      "detail": "2 frames in 2.5s (software renderer)"
     },
     "paused stops rendering": {
       "pass": true,
@@ -158,12 +171,12 @@
     },
     "paused freezes animation time": {
       "pass": true,
-      "detail": "10.766666666666696"
+      "detail": "13.316666666666551"
     },
     "paused transitions still complete": {
       "pass": true,
       "detail": {
-        "fog": 0.06247645492487418
+        "fog": 0.06242610150619002
       }
     },
     "resuming restarts the loop": {
@@ -188,32 +201,32 @@
     }
   },
   "data": {
-    "playingFrames": 3,
+    "playingFrames": 2,
     "pausedFrames": 0,
     "splash": {
       "fx": 0.66,
       "fy": 0.42,
       "point": "1.32,0.18",
       "impulses": "1",
-      "scared": "2.293800000011921"
+      "scared": "2.35"
     },
     "cycle": {
       "before": {
-        "step": 4,
+        "step": 1,
         "weather": "rain",
-        "night": true,
+        "night": false,
         "dwell": 6000
       },
       "after": {
-        "step": 0,
+        "step": 2,
         "weather": "clear",
-        "night": false,
+        "night": true,
         "dwell": 6000
       }
     },
     "weather": {
       "rain": {
-        "fog": 0.032532641012824375,
+        "fog": 0.02657864627894583,
         "night": "false",
         "className": "gallery  weather-rain",
         "state": {
@@ -224,7 +237,7 @@
         }
       },
       "mist": {
-        "fog": 0.06796343236998431,
+        "fog": 0.06720669031398321,
         "night": "true",
         "className": "gallery night weather-mist",
         "state": {
