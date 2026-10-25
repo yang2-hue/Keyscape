@@ -9,6 +9,7 @@
     "test": "node --experimental-strip-types --test tests/model.test.ts tests/harbor.test.ts tests/crescent.test.ts tests/gate.test.ts tests/gallery-state.test.ts",
     "preview": "vite preview --host 127.0.0.1 --port 4173",
     "verify": "node scripts/verify.mjs",
+    "accept:crescent": "node scripts/crescent-acceptance.mjs",
     "refs": "node scripts/optimize-references.mjs"
   },
   "dependencies": {

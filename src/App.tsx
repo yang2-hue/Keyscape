@@ -53,6 +53,51 @@ function CameraRig({ view, reduced, orthographic }: { view: View; reduced: boole
   const target = useRef(new THREE.Vector3(0, 0.35, 0));
   const baseZoom=Math.min(size.width/5.2,size.height/4.8);
   const zoomGoal=useRef(baseZoom);
+  // Dev-only camera handle. The acceptance harness needs reproducible
+  // viewpoints (dock landing, cottage door, lighthouse entrance) that a scripted
+  // mouse drag cannot hit twice, so it frames a target directly instead.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const debug = window as unknown as Record<string, unknown>;
+    debug.__galleryCamera = {
+      frame(pose: { target: [number, number, number]; zoom?: number; distance?: number; dir?: [number, number, number] }) {
+        const ctl = controls.current;
+        if (!ctl) return false;
+        moving.current = false;
+        const [tx, ty, tz] = pose.target;
+        const distance = pose.distance ?? 8;
+        // Default to the same viewing direction as the three-quarter camera.
+        const dir = new THREE.Vector3(...(pose.dir ?? [0.56, 0.55, 0.62])).normalize();
+        ctl.object.position.set(tx + dir.x * distance, ty + dir.y * distance, tz + dir.z * distance);
+        ctl.target.set(tx, ty, tz);
+        if (pose.zoom !== undefined && ctl.object instanceof THREE.OrthographicCamera) {
+          ctl.object.zoom = pose.zoom;
+          ctl.object.updateProjectionMatrix();
+        }
+        ctl.update();
+        invalidate();
+        // Report what actually took effect: OrbitControls clamps target and
+        // zoom, and a silently clamped frame would produce misleading evidence.
+        return {
+          target: ctl.target.toArray(),
+          position: ctl.object.position.toArray(),
+          zoom: ctl.object instanceof THREE.OrthographicCamera ? ctl.object.zoom : null,
+        };
+      },
+      read() {
+        const ctl = controls.current;
+        if (!ctl) return null;
+        return {
+          target: ctl.target.toArray(),
+          position: ctl.object.position.toArray(),
+          zoom: ctl.object instanceof THREE.OrthographicCamera ? ctl.object.zoom : null,
+          minZoom: ctl.minZoom,
+          maxZoom: ctl.maxZoom,
+        };
+      },
+    };
+    return () => { if (debug.__galleryCamera) delete debug.__galleryCamera; };
+  }, [invalidate]);
   useEffect(() => {
     if(orthographic){goal.current.set(5.6,5.7,6.2);zoomGoal.current=baseZoom*(view.kind==='close'?1.25:1);}
     else if (view.kind === 'close') goal.current.set(3.65, 2.35, 4.1);

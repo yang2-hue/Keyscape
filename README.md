@@ -14,8 +14,9 @@
 pnpm install
 pnpm dev          # http://127.0.0.1:5173/
 pnpm build        # tsc -b + vite build
-pnpm test         # 25 项单元测试（node --experimental-strip-types --test）
+pnpm test         # 26 项单元测试（node --experimental-strip-types --test）
 pnpm verify       # 浏览器验收（需先跑 pnpm dev），产出 outputs/gallery-verify-v09/
+pnpm accept:crescent  # 月湾逐项验收：6 张视角截图 + 扫光录屏 + check.json（约 4 分钟）
 pnpm refs         # 参考图转 webp 两档（full 1600 / thumb 480）
 ```
 
@@ -51,6 +52,7 @@ src/studio-shadows.tsx   自研接触阴影（完整释放资源）
 src/ArtKey.tsx           蓝洞早期习作与本地反射环境
 src/model.ts             用户 GLB 校验、归一化与资源释放
 scripts/verify.mjs       浏览器验收脚本（深链／渲停／注波／移动端点击区）
+scripts/crescent-acceptance.mjs  月湾产品验收（取景截图 + 扫光录屏 + 运动断言）
 scripts/optimize-references.mjs  参考图 webp 转换
 public/references/       已认可概念图（webp 全尺寸 + 缩略图）
 public/models/           历史 GLB 的来源与校验记录（二进制已归档，不再加载）
@@ -61,11 +63,11 @@ React、TypeScript、Vite、Three.js、React Three Fiber、Drei、@react-three/p
 
 ## 验证与边界
 
-- `tsc -b` 0 错误；`pnpm test` 25/25 通过；`vite build` 通过。
+- `tsc -b` 0 错误；`pnpm test` 26/26 通过；`vite build` 通过。
 - 生产包按库拆分为 `three`(705 kB) / `three-fiber`(426 kB) / `three-post`(89 kB) / 应用(154 kB)，`dist` 合计约 2.3 MB。three 单块仍 >500 kB，属库本体体积。
 - `pnpm verify` 13 项浏览器检查：三件程序化作品的深链、点击注波（`waveImpulses` +1）、播放／暂停的渲染回路（暂停后 2.5 s 内 0 帧）、暂停时冻结动画时间、暂停时昼夜过渡仍渲染、恢复播放、移动端 44 px 点击区与导航不溢出、无页面错误。
 - 检查环境是 Chrome / SwiftShader（约 3 fps），不能代表真实手机或硬件帧率。正式发布前需真机测试。
-- 月湾的艺术水准与真机性能仍未结案。作品切换不再逐次泄漏：首轮往返后纹理增量停在一次性的 +5（three.js 透射渲染目标，进蓝洞时建立），几何体持平；云门雾墙几何体未登记的泄漏已修，见 `outputs/memory-audit-v02/`。
+- 月湾已按 `docs/crescent-product-acceptance.md` 出了逐项对照（`outputs/crescent-acceptance-v09/README.md`）：码头过渡、灯塔入口、夜间扫光通过；台地与入户通路的**铺装辨识度**、夜景光束强度仍待美术判定；真机性能未测。作品切换不再逐次泄漏：首轮往返后纹理增量停在一次性的 +5（three.js 透射渲染目标，进蓝洞时建立），几何体持平；云门雾墙几何体未登记的泄漏已修，见 `outputs/memory-audit-v02/`。
 - Draco / KTX2 需额外解码器，当前不支持；程序化场景未导出为独立 GLB；项目仅在本地运行，未发布。
 
 历史生成资产与 SHA-256 记录保留在 `public/models/*/source.json`，二进制已归档到 `work/archive/`。对照依据见 `docs/reference-implementation-audit.md`。

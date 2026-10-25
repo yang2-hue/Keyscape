@@ -34,7 +34,7 @@
     },
     "paused freezes animation time": {
       "pass": true,
-      "detail": "0.8166666666666662"
+      "detail": "0.8583333333333327"
     },
     "paused backdrop transitions still render": {
       "pass": true,

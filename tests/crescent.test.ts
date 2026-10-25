@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { crescentHeight, CRESCENT, BERTH, createLighthouseBeam } from '../src/crescent-bay.ts';
 import { HARBOR,roundedSquarePoint,buildHeightfield } from '../src/harbor-layout.ts';
-import { MAIN_PATH,HOUSE_PATHS,SHORE_STAIRS,LANDING,TERRACE,stairTreads,accessClearance,COTTAGES,islandPoint } from '../src/crescent-access.ts';
+import { MAIN_PATH,HOUSE_PATHS,SHORE_STAIRS,LANDING,TERRACE,stairTreads,accessClearance,COTTAGES,islandPoint,TOWER } from '../src/crescent-access.ts';
 
 test('Float32 rounded edges preserve interior vertices and do not create long triangles',()=>{
   for(const n of [112,128])for(const sign of [-1,1]){
@@ -69,6 +69,20 @@ test('boat berth water is deep enough across the hull line', () => {
     const bed = crescentHeight(BERTH.x + dx, BERTH.z);
     assert.ok(bed < HARBOR.water - 0.13, `berth bed ${bed} too shallow at dx=${dx}`);
   }
+});
+
+test('the lighthouse door is reachable from the main road and faces inland',()=>{
+  // The tower stands on the outer tip of the southern arm, so the entrance has
+  // to open onto the court on the island side, never onto the cliff or the sea.
+  const door=islandPoint(TOWER.a,TOWER.r-.105);
+  assert.ok(accessClearance(door.x,door.z)<.01,'tower door must sit on the paved spur');
+  assert.ok(Math.abs(crescentHeight(door.x,door.z)-TERRACE)<.012,'court must be at terrace height');
+  const nearest=Math.min(...MAIN_PATH.map(p=>Math.hypot(p.x-door.x,p.z-door.z)));
+  assert.ok(nearest<.06,`tower door ${nearest} from the main road`);
+  // Door facing in study space is (-cos a, -sin a); it must point at the centre.
+  const facing=[-Math.cos(TOWER.a),-Math.sin(TOWER.a)];
+  const inward=[-0.22-door.x,0.06-door.z],length=Math.hypot(...inward);
+  assert.ok((facing[0]*inward[0]+facing[1]*inward[1])/length>.9,'door must face the island interior');
 });
 
 test('lighthouse beam stays visual-only and never raises the water heightfield',()=>{
