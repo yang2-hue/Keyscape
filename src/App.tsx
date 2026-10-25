@@ -13,11 +13,24 @@ import { WEATHERS, weatherParams, type WeatherKind } from './weather-model';
 /** One study, one key. The gallery used to hold four pieces; only the crescent
  * bay survived, so the collection UI (tabs, arrows, deep links) is gone with
  * them instead of pretending there is something to switch to. */
-const ARTWORK = {
-  name: '月湾环抱',
-  reference: '/references/crescent.webp',
-  thumb: '/references/crescent-thumb.webp',
-};
+const ARTWORK = { name: '月湾环抱' };
+
+/** The exhibition changes on its own: weather and time of day are part of the
+ * piece, not a settings panel. Each state is held long enough to read twice. */
+const CYCLE: { weather: WeatherKind; night: boolean }[] = [
+  { weather: 'clear', night: false },
+  { weather: 'overcast', night: false },
+  { weather: 'rain', night: false },
+  { weather: 'mist', night: false },
+  { weather: 'mist', night: true },
+  { weather: 'clear', night: true },
+  { weather: 'rain', night: true },
+];
+
+/** `?dwell=<seconds>` shortens the hold while developing and while the evidence
+ * harness records a full loop. Production always runs the fixed cadence. */
+const DEV_DWELL = import.meta.env.DEV ? Number(new URLSearchParams(window.location.search).get('dwell') ?? 0) : 0;
+const DWELL_MS = DEV_DWELL > 0 ? DEV_DWELL * 1000 : 20000;
 
 function useReducedMotion() {
   const [reduced, setReduced] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -28,6 +41,49 @@ function useReducedMotion() {
     return () => query.removeEventListener('change', update);
   }, []);
   return reduced;
+}
+
+/** Holds each exhibition state for `DWELL_MS`, then moves on. Timers stop while
+ * the tab is hidden, so coming back never lands mid-transition with several
+ * changes queued up. */
+function useAutoCycle() {
+  const [step, setStep] = useState(0);
+  const [revision, setRevision] = useState(0);
+  const held = useRef(false);
+  useEffect(() => {
+    let timer = 0;
+    const arm = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => setStep(value => (value + 1) % CYCLE.length), DWELL_MS);
+    };
+    const onVisibility = () => { if (document.hidden) window.clearTimeout(timer); else arm(); };
+    if (!document.hidden && !held.current) arm();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => { window.clearTimeout(timer); document.removeEventListener('visibilitychange', onVisibility); };
+  }, [step, revision]);
+  // Dev-only handle: the evidence harness has to reach a given preset without
+  // waiting through the whole loop, and has to freeze the loop while it takes
+  // screenshots. Never present in a production build.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const debug = window as unknown as Record<string, unknown>;
+    debug.__galleryCycle = {
+      set(index: number) {
+        const next = ((index % CYCLE.length) + CYCLE.length) % CYCLE.length;
+        held.current = true;
+        setStep(next);
+        setRevision(value => value + 1);
+        // Report the *requested* state: reading `step` here would still see the
+        // previous render's value.
+        return { step: next, ...CYCLE[next], dwell: DWELL_MS };
+      },
+      resume() { held.current = false; setRevision(value => value + 1); },
+      state() { return { step, ...CYCLE[step], dwell: DWELL_MS }; },
+      states: CYCLE,
+    };
+    return () => { delete debug.__galleryCycle; };
+  }, [step]);
+  return CYCLE[step];
 }
 
 /** A render failure used to be permanent: the boundary never reset, so the
@@ -137,7 +193,7 @@ const TRANSITION_FRAMES = 100;
  * a weather change is a transition rather than a cut. */
 function Atmosphere({ night, weather }: { night: boolean; weather: WeatherKind }) {
   const scene=useThree(state=>state.scene);
-  const software = useSoftwareRenderer();
+  const gl = useThree(state=>state.gl);
   const ambient = useRef<THREE.AmbientLight>(null);
   const sun = useRef<THREE.DirectionalLight>(null);
   const fill = useRef<THREE.DirectionalLight>(null);
@@ -145,7 +201,6 @@ function Atmosphere({ night, weather }: { night: boolean; weather: WeatherKind }
   const fog = useRef<THREE.FogExp2>(null);
   const color = useRef(new THREE.Color()).current;
   const fogColor = useRef(new THREE.Color()).current;
-  const gl = useThree(state=>state.gl);
   useFrame((_, dt) => {
     const delta = Math.min(dt, 0.05);
     const p = weatherParams(weather, night);
@@ -172,9 +227,9 @@ function Atmosphere({ night, weather }: { night: boolean; weather: WeatherKind }
     if (import.meta.env.DEV) {
       const d = gl.domElement.dataset;
       d.weather = weather;
+      d.night = String(night);
       d.fogDensity = String(fog.current?.density ?? 0);
       d.sunIntensity = String(sun.current?.intensity ?? 0);
-      d.ambientIntensity = String(ambient.current?.intensity ?? 0);
     }
   });
   const p = weatherParams(weather, night);
@@ -182,7 +237,7 @@ function Atmosphere({ night, weather }: { night: boolean; weather: WeatherKind }
     <fogExp2 ref={fog} attach="fog" args={FOG_INIT} />
     <ambientLight ref={ambient} intensity={p.ambient} color={p.ambientColor} />
     <hemisphereLight ref={hemi} intensity={night?.16:.45} color="#fff5e1" groundColor="#b6c9bc" />
-    <directionalLight ref={sun} position={[-3, 7, 4]} intensity={p.sun} color={p.sunColor} castShadow shadow-mapSize={software ? [1024, 1024] : [2048, 2048]} shadow-camera-left={-3} shadow-camera-right={3} shadow-camera-top={3} shadow-camera-bottom={-3} shadow-normalBias={0.012} shadow-bias={-0.0002} shadow-radius={3} />
+    <directionalLight ref={sun} position={[-3, 7, 4]} intensity={p.sun} color={p.sunColor} castShadow shadow-mapSize={[3072, 3072]} shadow-camera-left={-3} shadow-camera-right={3} shadow-camera-top={3} shadow-camera-bottom={-3} shadow-normalBias={0.012} shadow-bias={-0.0002} shadow-radius={3} />
     <directionalLight ref={fill} position={[4, 3, -4]} intensity={p.fill} color="#a5d6e3" />
   </>;
 }
@@ -226,9 +281,9 @@ function DemandPump({ boost, playing }: { boost: string; playing: boolean }) {
 
 function PostChain() {
   const software = useSoftwareRenderer();
-  return <>{!software && <SoftShadows size={12} samples={8} focus={.25} />}<EffectComposer multisampling={software ? 0 : 4} enableNormalPass>
-    <SSAO samples={8} radius={.075} intensity={.8} luminanceInfluence={.8} bias={.025} />
-    <Bloom intensity={.06} luminanceThreshold={1.3} mipmapBlur />
+  return <>{!software && <SoftShadows size={10} samples={12} focus={.22} />}<EffectComposer multisampling={software ? 0 : 4} enableNormalPass>
+    <SSAO samples={software ? 8 : 16} radius={.072} intensity={1.05} luminanceInfluence={.85} bias={.022} />
+    <Bloom intensity={.07} luminanceThreshold={1.25} mipmapBlur />
     <Vignette offset={.12} darkness={.08} />
   </EffectComposer></>;
 }
@@ -241,28 +296,16 @@ function GalleryScene({ playing, night, weather, view, reduced, imported, onRead
     <Suspense fallback={null}>
       <StudioEnvironment />
       {imported ? <primitive object={imported} dispose={null} /> : <CrescentStudy playing={playing} night={night} weather={weather} />}
-      <StudioShadows key={imported?.uuid ?? 'crescent'} frames={1} position={[0, -0.83, 0]} opacity={0.35} scale={12} blur={2.7} far={5} resolution={256} color="#555345" />
+      <StudioShadows key={imported?.uuid ?? 'crescent'} frames={1} position={[0, -0.83, 0]} opacity={0.35} scale={12} blur={2.7} far={5} resolution={512} color="#555345" />
     </Suspense>
     <CameraRig view={view} reduced={reduced} orthographic={!imported} />
     {!imported && <PostChain />}
   </Canvas>;
 }
 
-function ReferenceDialog({ onClose }: { onClose: () => void }) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => { dialog.current?.showModal(); return () => dialog.current?.close(); }, []);
-  return <dialog ref={dialog} className="reference-dialog" onCancel={onClose} onClick={e => { if (e.target === e.currentTarget) onClose(); }} aria-label={`${ARTWORK.name}美术参考`}>
-    <div className="dialog-head"><div><span className="eyebrow">ART DIRECTION</span><h2>希望抵达的细节</h2></div><button autoFocus className="round-button" aria-label="关闭参考图" onClick={onClose}>×</button></div>
-    <img src={ARTWORK.reference} alt={`${ARTWORK.name}单键概念图：月牙形的岛环抱一片浅浅的泻湖`} />
-    <p>已认可的美术参考 · 这是一张概念图。展厅里的场景是逐块程序化生成的微缩模型，精度与概念图仍有差距。</p>
-  </dialog>;
-}
-
 export default function App() {
   const [playing, setPlaying] = useState(true);
-  const [night, setNight] = useState(false);
-  const [weather, setWeather] = useState<WeatherKind>('clear');
-  const [reference, setReference] = useState(false);
+  const { weather, night } = useAutoCycle();
   const [ready, setReady] = useState(false);
   const [view, setView] = useState<View>({ kind: 'home', serial: 0 });
   const [imported, setImported] = useState<THREE.Group | null>(null);
@@ -292,6 +335,7 @@ export default function App() {
   }
 
   const dark = night && !imported;
+  const weatherLabel = WEATHERS.find(item => item.id === weather)?.title ?? '晴天';
 
   return <main className={`gallery ${dark ? 'night' : ''} weather-${weather}`}>
     <header className="masthead"><a className="wordmark" href="/" aria-label="Keyscape 首页">keyscape<span>✳</span></a><button className="text-button import-button" onClick={() => fileInput.current?.click()} disabled={loading}>{loading ? '正在读取…' : '导入作品'} <span aria-hidden>↗</span></button></header>
@@ -309,22 +353,16 @@ export default function App() {
     <aside className="side-tools" aria-label="观察作品">
       <button className="round-button" aria-label="拉近观察" title="拉近观察" onClick={() => setView(v => nextView(v, 'close'))}>＋</button>
       <button className="round-button" aria-label="恢复初始视角" title="恢复初始视角" onClick={() => setView(v => nextView(v, 'home'))}>↺</button>
-      {!imported && <button className="reference-trigger" onClick={() => setReference(true)}><img src={ARTWORK.thumb} alt="" /><span>美术参考 ↗</span></button>}
     </aside>
 
     <footer className="gallery-footer">
-      <span className="gesture-hint">拖动旋转 <b>·</b> 滚轮拉近 <b>·</b> 点击水面</span>
+      <span className="gesture-hint">拖动旋转 <b>·</b> 滚轮拉近 <b>·</b> 点击灯塔、小船、水面</span>
       <div className="mood-controls">
-        <button className="text-button" aria-pressed={night} onClick={() => setNight(!night)}><span aria-hidden>{night ? '◐' : '☼'}</span> {night ? '夜航' : '日光'}</button>
-        <span className="control-divider" />
-        <div className="weather-switch" role="group" aria-label="天气">
-          {WEATHERS.map(item => <button key={item.id} aria-pressed={weather === item.id} aria-label={item.title} title={item.title} onClick={() => setWeather(item.id)}>{item.label}</button>)}
-        </div>
+        <span className="cycle-state" aria-live="polite">{weatherLabel} · {night ? '夜航' : '日光'}</span>
         <span className="control-divider" />
         <button className="text-button" aria-pressed={!playing || reduced} disabled={reduced} onClick={() => setPlaying(!playing)}>{reduced ? '静态模式' : playing ? 'Ⅱ 暂停动态' : '▷ 继续动态'}</button>
       </div>
     </footer>
     {message && <div className="toast" role="status">{message}<button aria-label="关闭提示" onClick={() => setMessage('')}>×</button></div>}
-    {reference && <ReferenceDialog onClose={() => setReference(false)} />}
   </main>;
 }

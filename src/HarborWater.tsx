@@ -97,7 +97,7 @@ const fragment=`
 
 /** Capture the dry scene once. Both interfaces read the same capture, so they
  * never refract each other or produce a second image of the seabed. */
-export default function HarborWater({ field, footprint, playing, evening, rainy, dynamics,deepTint=0,swellAmp=0,swellDir=NO_SWELL }: { field: Heightfield; footprint: THREE.Vector2[]; playing: boolean; evening: boolean; rainy: boolean; dynamics?:WaterDynamics;deepTint?:number;swellAmp?:number;swellDir?:[number,number] }) {
+export default function HarborWater({ field, footprint, playing, evening, rainy, dynamics,deepTint=0,swellAmp=0,swellDir=NO_SWELL,onSplash }: { field: Heightfield; footprint: THREE.Vector2[]; playing: boolean; evening: boolean; rainy: boolean; dynamics?:WaterDynamics;deepTint?:number;swellAmp?:number;swellDir?:[number,number];onSplash?:(x:number,z:number)=>void }) {
   const water=useRef<THREE.Group>(null);
   const size=useThree(state=>state.size);
   const gl=useThree(state=>state.gl);
@@ -213,6 +213,8 @@ export default function HarborWater({ field, footprint, playing, evening, rainy,
     const accepted=dynamics.addImpulse(point.x,point.z,.040,.090);
     c.splashPoint=`${point.x.toFixed(2)},${point.z.toFixed(2)}`;c.splashAccepted=String(accepted);
     c.splashDepth=String(field.sample(point.x,point.z)-HARBOR.water);
+    // Let the study react to the same tap (the fish bolt away from it).
+    if(accepted)onSplash?.(point.x,point.z);
   }
   return <group name="ResinSea">
     <mesh geometry={resources.foot} material={resources.footMaterial} castShadow receiveShadow />

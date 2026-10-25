@@ -34,10 +34,6 @@ a{color:inherit;text-decoration:none}
 .side-tools{position:absolute;right:4.4%;top:43%;display:flex;flex-direction:column;gap:10px;align-items:center}
 .round-button{width:36px;height:36px;border-radius:50%;border:1px solid #7d897d45;font-size:23px;display:grid;place-items:center;transition:background .2s,transform .2s}
 .round-button:hover{background:#ffffff70;transform:translateY(-1px)}
-.reference-trigger{margin-top:23px;padding:0;width:72px}
-.reference-trigger img{width:72px;height:54px;object-fit:cover;border-radius:3px;filter:saturate(.7);transition:filter .2s}
-.reference-trigger:hover img{filter:saturate(1)}
-.reference-trigger span{display:block;font-size:9px;margin-top:7px;letter-spacing:.3px;opacity:.75}
 
 /* ---- controls --------------------------------------------------------- */
 .gallery-footer{position:absolute;bottom:0;left:4.4%;right:4.4%;height:100px;border-top:1px solid #7c887c35;display:flex;align-items:center;justify-content:space-between;gap:20px}
@@ -45,11 +41,8 @@ a{color:inherit;text-decoration:none}
 .gesture-hint b{font-weight:400;margin:0 8px}
 .mood-controls{display:flex;align-items:center;gap:16px}
 .mood-controls .text-button{min-width:50px;text-align:left}
+.cycle-state{font-size:11px;letter-spacing:.9px;opacity:.62;white-space:nowrap}
 .control-divider{height:13px;width:1px;background:#88928350}
-.weather-switch{display:flex;align-items:center;gap:2px}
-.weather-switch button{font-size:11px;letter-spacing:.4px;padding:9px 7px;min-width:30px;border-radius:3px;opacity:.5;transition:opacity .2s,background .2s}
-.weather-switch button:hover{opacity:.85}
-.weather-switch button[aria-pressed="true"]{opacity:1;box-shadow:inset 0 -1px 0 currentColor}
 
 /* ---- states ----------------------------------------------------------- */
 .loading,.scene-fallback{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;letter-spacing:1px}
@@ -61,22 +54,13 @@ a{color:inherit;text-decoration:none}
 .toast{position:absolute;bottom:115px;left:50%;transform:translateX(-50%);z-index:12;background:#354d44;color:#f4f1e9;padding:15px 20px;border-radius:5px;font-size:12px;max-width:90vw;box-shadow:0 10px 30px #202d2920;display:flex;gap:18px;align-items:center}
 .toast button{color:inherit;font-size:20px}
 
-/* ---- reference dialog ------------------------------------------------- */
-.reference-dialog{border:0;border-radius:10px;padding:24px;max-width:min(880px,92vw);max-height:90svh;background:#f0ece3;color:#35453d;box-shadow:0 25px 100px #142d3445}
-.reference-dialog::backdrop{background:#1b353675;backdrop-filter:blur(10px)}
-.dialog-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;gap:30px}
-.eyebrow{font-size:9px;letter-spacing:2px;opacity:.55}
-.dialog-head h2{font-size:20px;font-weight:400;letter-spacing:2px;margin:9px 0 0}
-.reference-dialog img{display:block;max-height:62svh;width:100%;object-fit:contain;border-radius:4px}
-.reference-dialog p{font-size:11px;line-height:1.8;color:#748071;margin:18px 0 0;max-width:650px}
 
 /* ---- night ------------------------------------------------------------ */
-.night .wordmark,.night h1,.night .mood-controls,.night .reference-trigger,.night .import-button{color:#f0e8d5}
+.night .wordmark,.night h1,.night .mood-controls,.night .import-button{color:#f0e8d5}
 .night .gallery-footer{border-color:#d5dac438}
 .night .round-button{border-color:#dce5d456}
 .night .round-button:hover{background:#ffffff15}
-.night .weather-switch button[aria-pressed="true"]{box-shadow:inset 0 -1px 0 currentColor}
-.night .loading{background:#687b8cd9}
+.night .night .loading{background:#687b8cd9}
 
 @keyframes arrive{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:translateY(0)}}
 
@@ -98,15 +82,10 @@ a{color:inherit;text-decoration:none}
   .art-stage{inset:23% 0 24% 0}
   .side-tools{right:7%;top:auto;bottom:168px;gap:10px}
   .side-tools .round-button{width:44px;height:44px;font-size:20px}
-  .reference-trigger{position:fixed;left:7%;bottom:172px;width:60px;margin:0}
-  .reference-trigger img{width:60px;height:45px}
-  .reference-trigger span{font-size:8px}
   .gallery-footer{left:6%;right:6%;height:auto;padding:12px 0 18px;flex-direction:column;gap:10px;align-items:center}
   .mood-controls{flex-wrap:wrap;justify-content:center;gap:12px;width:100%}
   .mood-controls .text-button{font-size:11px;min-height:44px;display:flex;align-items:center;gap:4px}
-  .weather-switch button{padding:11px 9px;min-width:44px;min-height:44px;font-size:12px}
+  .cycle-state{font-size:11px}
   .toast{bottom:150px;width:max-content;max-width:90vw}
-  .reference-dialog{padding:16px}
-  .reference-dialog img{max-height:58svh}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}

@@ -9,8 +9,7 @@
     "test": "node --experimental-strip-types --test tests/model.test.ts tests/layout.test.ts tests/crescent.test.ts tests/gallery-state.test.ts tests/weather.test.ts",
     "preview": "vite preview --host 127.0.0.1 --port 4173",
     "verify": "node scripts/verify.mjs",
-    "accept:crescent": "node scripts/crescent-acceptance.mjs",
-    "refs": "node scripts/optimize-references.mjs"
+    "accept:crescent": "node scripts/crescent-acceptance.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.0",

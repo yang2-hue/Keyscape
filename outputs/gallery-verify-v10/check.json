@@ -1,0 +1,229 @@
+{
+  "base": "http://127.0.0.1:5173",
+  "renderer": "Chrome headless (SwiftShader), not hardware performance",
+  "checks": {
+    "study boots with its own title": {
+      "pass": true,
+      "detail": "月湾环抱"
+    },
+    "caption carries no filler copy": {
+      "pass": true,
+      "detail": "月湾环抱"
+    },
+    "no collection chrome left": {
+      "pass": true
+    },
+    "art direction reference is gone": {
+      "pass": true
+    },
+    "daylight leaves the lamp room unlit": {
+      "pass": true,
+      "detail": {
+        "lanternEmissive": 0,
+        "beaconStrength": 0,
+        "searchLight": 0
+      }
+    },
+    "clicking the lighthouse lights it by day": {
+      "pass": true,
+      "detail": {
+        "flash": 2.981900000005963,
+        "lantern": 0.6483179059361672
+      }
+    },
+    "clicking the boat sends it on a lap": {
+      "pass": true,
+      "detail": {
+        "tour": 0.023076923076923078
+      }
+    },
+    "clicking the lagoon raises a wave and scatters the fish": {
+      "pass": true,
+      "detail": {
+        "fx": 0.66,
+        "fy": 0.42,
+        "point": "1.29,0.21",
+        "impulses": "1",
+        "scared": "2.3415999999940396"
+      }
+    },
+    "the exhibition advances on its own": {
+      "pass": true,
+      "detail": {
+        "from": 1,
+        "to": 2,
+        "dwell": 6000
+      }
+    },
+    "overcast: fog and lights reach the preset": {
+      "pass": true,
+      "detail": {
+        "fog": 0.017552509309346227,
+        "weather": "overcast",
+        "className": "gallery  weather-overcast",
+        "state": {
+          "step": 1,
+          "weather": "overcast",
+          "night": false,
+          "dwell": 6000
+        }
+      }
+    },
+    "mist: fog and lights reach the preset": {
+      "pass": true,
+      "detail": {
+        "fog": 0.06621311592581504,
+        "weather": "mist",
+        "className": "gallery  weather-mist",
+        "state": {
+          "step": 3,
+          "weather": "mist",
+          "night": false,
+          "dwell": 6000
+        }
+      }
+    },
+    "rain: fog and lights reach the preset": {
+      "pass": true,
+      "detail": {
+        "fog": 0.033242721396678526,
+        "weather": "rain",
+        "className": "gallery  weather-rain",
+        "state": {
+          "step": 2,
+          "weather": "rain",
+          "night": false,
+          "dwell": 6000
+        }
+      }
+    },
+    "fog thickens from overcast through rain to mist": {
+      "pass": true,
+      "detail": {
+        "overcast": 0.017552509309346227,
+        "rain": 0.033242721396678526,
+        "mist": 0.06621311592581504
+      }
+    },
+    "night lights the beacon": {
+      "pass": true,
+      "detail": {
+        "lanternEmissive": 1.2559113752278666,
+        "searchLight": 2.7472931676383516
+      }
+    },
+    "night turns the sweep beam on": {
+      "pass": true,
+      "detail": {
+        "beaconStrength": 0.9175066224235173
+      }
+    },
+    "daylight switches the beacon off again": {
+      "pass": true,
+      "detail": {
+        "lanternEmissive": 0.025894253438262134
+      }
+    },
+    "playing renders continuously": {
+      "pass": true,
+      "detail": "3 frames in 2.5s (software renderer)"
+    },
+    "paused stops rendering": {
+      "pass": true,
+      "detail": "0 frames in 2.5s"
+    },
+    "paused freezes animation time": {
+      "pass": true,
+      "detail": "8.950000000000133"
+    },
+    "paused transitions still complete": {
+      "pass": true,
+      "detail": {
+        "fog": 0.06130922586679581
+      }
+    },
+    "resuming restarts the loop": {
+      "pass": true,
+      "detail": "frames advanced"
+    },
+    "mobile tap targets reach 44px": {
+      "pass": true,
+      "detail": {
+        "smallest": 44,
+        "count": 3,
+        "sizes": []
+      }
+    },
+    "mobile footer does not overflow": {
+      "pass": true,
+      "detail": "0px"
+    },
+    "no page errors": {
+      "pass": true,
+      "detail": []
+    }
+  },
+  "data": {
+    "playingFrames": 3,
+    "pausedFrames": 0,
+    "splash": {
+      "fx": 0.66,
+      "fy": 0.42,
+      "point": "1.29,0.21",
+      "impulses": "1",
+      "scared": "2.3415999999940396"
+    },
+    "cycle": {
+      "before": {
+        "step": 1,
+        "weather": "overcast",
+        "night": false,
+        "dwell": 6000
+      },
+      "after": {
+        "step": 2,
+        "weather": "rain",
+        "night": false,
+        "dwell": 6000
+      }
+    },
+    "weather": {
+      "overcast": {
+        "fog": 0.017552509309346227,
+        "weather": "overcast",
+        "className": "gallery  weather-overcast",
+        "state": {
+          "step": 1,
+          "weather": "overcast",
+          "night": false,
+          "dwell": 6000
+        }
+      },
+      "mist": {
+        "fog": 0.06621311592581504,
+        "weather": "mist",
+        "className": "gallery  weather-mist",
+        "state": {
+          "step": 3,
+          "weather": "mist",
+          "night": false,
+          "dwell": 6000
+        }
+      },
+      "rain": {
+        "fog": 0.033242721396678526,
+        "weather": "rain",
+        "className": "gallery  weather-rain",
+        "state": {
+          "step": 2,
+          "weather": "rain",
+          "night": false,
+          "dwell": 6000
+        }
+      }
+    },
+    "smallestTapTarget": 44
+  },
+  "errors": [],
+  "passed": true
+}

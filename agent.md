@@ -4,6 +4,22 @@
 
 2026-10-25：用户要求将月湾的场景逻辑问题整理为文档，见 [月湾产品验收与整改要求](docs/crescent-product-acceptance.md)。后续实现须优先解决“船 → 码头 → 岸阶 → 主路 → 小屋／灯塔”的完整动线、可用台地与入口，以及夜间灯塔扫光；按该文档逐项交付实际证据。本次仅整理文档，不代表整改已完成或验收通过。
 
+## 2026-10-26 第十一次更新（自动展览 · 交互 · 画质）
+
+用户五点要求：撤掉美术参考；白天灯塔“还是没有完全熄灭”；渲染更精致、岩壁太粗糙；多加交互；天气与昼夜改成系统自动切换、不让用户调节；并再次问“导入作品”是什么。
+
+1. **撤掉美术参考**：删 `ReferenceDialog`、侧栏缩略图、`public/references/`、`scripts/optimize-references.mjs`、`pnpm refs`。
+2. **白天灯塔**：之前只把 `emissiveIntensity` 归零，但灯球颜色是 `#efe6cd`（近白），正午光下依然像亮着。改为深琥珀 `#4c4335` + `metalness .15`，白天读作玻璃灯具。夜航与点击时才发光。
+3. **画质**：地形 112² → 176²；巨石 `SphereGeometry(1,16,12) → (1,32,20)`；石灰岩贴图平铺（地形 13×、巨石 7×）并加深 bump；terrain 着色器加竖向侵蚀（只作用于陡面）；顶点色按网格四邻算“折痕”烘焙 AO；阴影 2048² → 3072²；SSAO 半径 .072 / 强度 1.05。
+4. **自动展览**：`CYCLE` 7 步（晴/阴/雨/雾/雾夜/晴夜/雨夜），`DWELL_MS = 20000`；删掉天气与昼夜按钮，只留只读标签；`visibilitychange` 时停表。`?dwell=` 仅 DEV 生效。
+5. **交互**：`landmarkOf()` 沿父链找 `Lighthouse` / `CrescentBoat`；灯塔 `flash` 3.6 秒（`pulse = max(0,sin(flash*9))` 闪三下，同时光锥 0.95 rad/s），船 `tour` 13 秒绕泻湖 r=0.20 一圈（两端 smoothstep 缓入缓出），水面点击经 `HarborWater.onSplash` 回调惊鱼（鱼在水下，点不到，只能靠水波）。
+   坑：船与鱼是 root 的**兄弟** primitive，事件处理器挂在 root 上收不到——三个 primitive 都要挂 `onClick/onPointerMove/onPointerOut`。
+6. **`导入作品` 仍未删**：它是选择本地 `.glb`（贴图内嵌、≤50 MB）替换展厅模型的开发期工具，与作品无关。用户仍未表态删除，故保留；删它只需去掉 `src/model.ts` 与 App 里的导入分支。
+
+验收：`tsc` 0 错误、23 项单测、`vite build` 1.3 MB、`pnpm verify` **24 项全过**、`pnpm accept:crescent` 11 项全过。证据：`outputs/gallery-verify-v10/`（晴/阴/雨/雾/夜/移动端截图 + check.json）、`outputs/crescent-acceptance-v10/`（6 视角 + 12 秒扫光 + check.json）。
+
+DEV 句柄（生产包不含）：`__galleryCamera`（取景）、`__galleryCycle`（set/resume/state，冻结循环）、`__galleryLandmarks`（positions/screen，给测试点击用）。
+
 ## 2026-10-26 当前推进状态（v10，优先于下文一切历史描述）
 
 **仓库只保留一件作品：`月湾环抱`。** 用户明确要求删除 `潮汐之间`、`云门拱语`、`蓝洞来信`，且“不要保留”。

@@ -56,7 +56,7 @@ export function crescentHeight(x:number,z:number){
  * outcrops and boulders never read as the same shape rescaled. */
 function boulderGeometry(seed:number){
   const rnd=seeded(seed);
-  const g=new THREE.SphereGeometry(1,16,12),p=g.attributes.position;
+  const g=new THREE.SphereGeometry(1,32,20),p=g.attributes.position;
   const f1=2.4+rnd()*1.8,f2=2.2+rnd()*2.4,f3=2.8+rnd()*1.8,f4=4.5+rnd()*3.5,ph=rnd()*6;
   for(let i=0;i<p.count;i++){
     const x=p.getX(i),y=p.getY(i),z=p.getZ(i);
@@ -71,14 +71,32 @@ function boulderGeometry(seed:number){
 export function createCrescentBay(time:{value:number}){
   const palette=makeCoastalMaterials(time,HARBOR.water,.40),m=palette.materials;
   m.rock.color.set('#f3eee2');m.stone.color.set('#e8e0ce');
+  // The shared 256 px stone tile is stretched once across the whole key, so at
+  // close range the cliffs read as smooth clay. Tile it and deepen the bump on
+  // the two surfaces that are mostly rock.
+  const extraTextures:THREE.Texture[]=[];
+  const retile=(source:THREE.Material,repeat:number,bump:number)=>{
+    const material=source as THREE.MeshStandardMaterial;
+    if(!material.map)return;
+    const map=material.map.clone();map.repeat.set(repeat,repeat);map.anisotropy=8;map.needsUpdate=true;
+    material.map=map;material.bumpMap=map;material.bumpScale=bump;
+    extraTextures.push(map);
+  };
+  retile(m.rock,7,.017);
   // Separate limestone cliffs, warm beach and cooler submerged rock.
   const terrainMaterial=m.rock.clone();terrainMaterial.vertexColors=true;terrainMaterial.color.set('#ffffff');
+  retile(terrainMaterial,13,.03);
   const onTerrainCompile=m.rock.onBeforeCompile;
   terrainMaterial.onBeforeCompile=(shader,renderer)=>{
     onTerrainCompile.call(m.rock,shader,renderer);
     shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
       float strata=sin(tideP.y*135.0+sin(tideP.x*23.0+tideP.z*18.0)*1.6);
-      diffuseColor.rgb*=1.0+strata*.035;
+      diffuseColor.rgb*=1.0+strata*.05;
+      // Vertical erosion flutes, only on the steep faces: without them a cliff
+      // is just a smooth wall with a few horizontal lines painted on.
+      float steep=1.0-smoothstep(.22,.78,tideN.y);
+      float flutes=.5+.5*sin(tideP.y*64.0+sin(tideP.x*37.0+tideP.z*29.0)*2.6);
+      diffuseColor.rgb*=1.0-steep*(.14-.10*flutes);
     `);
   };
   terrainMaterial.customProgramCacheKey=()=> 'crescent-limestone-v02';
@@ -101,19 +119,31 @@ export function createCrescentBay(time:{value:number}){
   const random=seeded(8209);
   const polar=(angle:number,radius:number):V=>[CRESCENT.cx+Math.cos(angle)*radius,0,CRESCENT.cz+Math.sin(angle)*radius];
   // Continuous lagoon/sea bed and island share one height function.
-  const floor=new THREE.PlaneGeometry(3.14,3.14,112,112);floor.rotateX(-Math.PI/2);
+  // 176 cells across 3.14 units is 1.8 cm per cell: cliffs stop reading as a
+  // staircase of flat quads when the camera comes close.
+  const floor=new THREE.PlaneGeometry(3.14,3.14,176,176);floor.rotateX(-Math.PI/2);
   const fp=floor.attributes.position;
   for(let i=0;i<fp.count;i++){
     const [x,z]=roundedSquarePoint(fp.getX(i),fp.getZ(i));
     fp.setXYZ(i,x,crescentHeight(x,z),z);
   }floor.computeVertexNormals();
   const colors:number[]=[],sandColor=new THREE.Color('#e9d9b8'),cliffColor=new THREE.Color('#e2dfd4'),deepColor=new THREE.Color('#749892');
-  const normal=floor.attributes.normal;
+  const normal=floor.attributes.normal,row=177;
   for(let i=0;i<fp.count;i++){
     const h=fp.getY(i),n=normal.getY(i),c=new THREE.Color();
     if(h<HARBOR.water-.15)c.copy(deepColor).lerp(sandColor,smooth(h,-.50,-.12));
     else c.copy(cliffColor).lerp(sandColor,smooth(n,.75,.98));
-    c.multiplyScalar(.94+.06*Math.sin(fp.getX(i)*19+fp.getZ(i)*14));colors.push(c.r,c.g,c.b);
+    c.multiplyScalar(.94+.06*Math.sin(fp.getX(i)*19+fp.getZ(i)*14));
+    // Cheap baked ambient occlusion from the grid itself: a vertex sitting
+    // below its four neighbours is in a fold, and folds are what makes a cliff
+    // read as rock instead of a smooth wall. No extra height samples needed.
+    if(h>HARBOR.water-.10){
+      const left=i%row>0?fp.getY(i-1):h,right=i%row<row-1?fp.getY(i+1):h;
+      const back=i>=row?fp.getY(i-row):h,front=i+fp.count-row<fp.count?fp.getY(i+row):h;
+      const fold=Math.max(0,(left+right+back+front)*.25-h);
+      c.multiplyScalar(1-Math.min(.30,fold*7));
+    }
+    colors.push(c.r,c.g,c.b);
   }
   floor.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
   const landscape=mesh(floor,terrainMaterial);landscape.name='CrescentShore';
@@ -248,9 +278,9 @@ export function createCrescentBay(time:{value:number}){
   }
   mesh(new THREE.CylinderGeometry(.125,.107,.03,48),m.stone,[0,.615,0],tower);
   mesh(new THREE.CylinderGeometry(.06,.06,.13,16),m.glass,[0,.70,0],tower);
-  // Unlit by day: pale glass with no emissive, so the lighthouse reads as
-  // architecture rather than a lamp that is on at noon.
-  const lanternMaterial=new THREE.MeshStandardMaterial({color:'#efe6cd',emissive:'#ffbf65',emissiveIntensity:0,roughness:.55});
+  // Unlit by day: a dark amber lens inside the glass, not a cream ball. Without
+  // emissive a pale sphere still reads as "switched on" under a noon sun.
+  const lanternMaterial=new THREE.MeshStandardMaterial({color:'#4c4335',emissive:'#ffbf65',emissiveIntensity:0,roughness:.42,metalness:.15});
   const lantern=mesh(new THREE.SphereGeometry(.035,12,8),lanternMaterial,[0,.70,0],tower);lantern.name='CrescentLantern';
   // Warm evening glow: a small real light plus a soft halo billboard so the
   // lantern reads from the default camera distance, not only in close-up.
@@ -492,5 +522,5 @@ export function createCrescentBay(time:{value:number}){
     fish.add(animal);
   }
   root.updateMatrixWorld(true);
-  return {root,boat,fish,fishActors,beacon,beamMaterial,searchLight,footprint:bayFootprint(),lanternMaterial,lanternLight,haloMaterial,windowMaterial,dispose(){root.traverse(object=>{if(object instanceof THREE.InstancedMesh)object.dispose();});geometries.forEach(g=>g.dispose());palette.dispose();terrainMaterial.dispose();hullMaterial.dispose();lanternMaterial.dispose();haloMaterial.dispose();haloTexture.dispose();windowMaterial.dispose();beamMaterial.dispose();searchLight.dispose();}};
+  return {root,boat,fish,fishActors,beacon,beamMaterial,searchLight,footprint:bayFootprint(),lanternMaterial,lanternLight,haloMaterial,windowMaterial,dispose(){root.traverse(object=>{if(object instanceof THREE.InstancedMesh)object.dispose();});geometries.forEach(g=>g.dispose());palette.dispose();terrainMaterial.dispose();extraTextures.forEach(t=>t.dispose());hullMaterial.dispose();lanternMaterial.dispose();haloMaterial.dispose();haloTexture.dispose();windowMaterial.dispose();beamMaterial.dispose();searchLight.dispose();}};
 }
