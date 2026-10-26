@@ -2,6 +2,8 @@
 
 **把一颗键，变成一个值得停留的世界。**
 
+[在线体验](https://yang2-hue.github.io/Keyscape/) · [新一轮单键概念](docs/concepts/next-keys/README.md)
+
 An interactive keycap diorama built with React Three Fiber. 当前版本是一颗海岸主题艺术键：月牙形海湾、微缩村落和灯塔，以及实时变化的水面、天气与光照。
 
 ![海岸作品实机截图](docs/media/coastal-day.png)
@@ -29,6 +31,8 @@ pnpm preview   # http://127.0.0.1:4173/
 ```
 
 六件 GLB 和贴图随项目提供，运行不需要素材平台账号或 API 密钥。
+
+模型编辑和 Blender 脚本的输入条件见 [资产制作说明](docs/assets.md)。
 
 ## 技术与结构
 

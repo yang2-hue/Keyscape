@@ -4,7 +4,7 @@
  *   node scripts/verify.mjs [--base=http://127.0.0.1:5173] [--out=outputs/gallery-verify-v17]
  *
  * Requires a running dev server (`pnpm dev`). Playwright is resolved from the
- * project first, then from PLAYWRIGHT_MODULE, then from PLAYWRIGHT_MODULE. Chrome defaults to Playwright Chromium;
+ * project first or from PLAYWRIGHT_MODULE. Chrome defaults to Playwright Chromium;
  * override with CHROME_PATH.
  *
  * The exhibition cycles on its own and exposes no controls, so the harness uses
