@@ -1,7 +1,12 @@
 import * as THREE from 'three';
+import {createBeaconVolume} from './beacon-light.ts';
+import {beachInfluence,headlandInfluence} from './coastal-composition.ts';
+import {closeTerrainVolume} from './terrain-volume.ts';
+import {addCoastalArt,applyCoastalScan,type CoastalArtAssets} from './coastal-asset-details.ts';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { makeCoastalMaterials,seeded,type CoastalMaterials } from './coastal-materials.ts';
 import { HARBOR,roundedSquarePoint,keycapOutline } from './harbor-layout.ts';
+import { limestoneGeometry,leafBladeGeometry,sculptCliffs,limestoneSurface } from './coastal-forms.ts';
 import { COTTAGES,TOWER,TERRACE,MAIN_PATH,HOUSE_PATHS,SHORE_STAIRS,islandPoint,gradeAccessTerrain,keepAccessClear,stairTreads,nearestOnSegment } from './crescent-access.ts';
 
 type V=[number,number,number];
@@ -41,24 +46,13 @@ export const DOCK=(()=>{
 })();
 
 /** The beacon is a visual effect, never a solid obstacle in the water field. */
-export function createLighthouseBeam(){
-  const geometry=new THREE.ConeGeometry(.48,3.8,48,1,true);
-  geometry.rotateX(-Math.PI/2);geometry.translate(0,0,1.9);
-  const material=new THREE.ShaderMaterial({transparent:true,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,
-    uniforms:{strength:{value:0}},
-    vertexShader:'varying vec3 p;void main(){p=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
-    fragmentShader:'uniform float strength;varying vec3 p;void main(){float fade=pow(clamp(1.0-p.z/3.8,0.0,1.0),1.5);gl_FragColor=vec4(1.0,.82,.52,strength*.10*fade);}'
-  });
-  const beam=new THREE.Mesh(geometry,material);beam.name='LighthouseBeam';
-  beam.castShadow=beam.receiveShadow=false;beam.userData.ignoreHeightfield=true;
-  return {beam,material};
-}
+export function createLighthouseBeam(){return createBeaconVolume();}
 
 export function crescentHeight(x:number,z:number){
   const dx=x-CRESCENT.cx,dz=z-CRESCENT.cz,r=Math.hypot(dx,dz);
   const a=Math.atan2(dz,dx),wrap=Math.abs(Math.atan2(Math.sin(a-CRESCENT.openAt),Math.cos(a-CRESCENT.openAt)));
   const open=smooth(wrap,CRESCENT.openLo,CRESCENT.openHi);
-  const shapedR=r+.028*Math.sin(a*7)+.018*Math.sin(a*13);
+  const shapedR=r+.060*Math.sin(a*3+.4)+.024*Math.sin(a*7+.9)+.012*Math.sin(a*13);
   const bed=THREE.MathUtils.lerp(-.24,-.58,smooth(r,CRESCENT.rIn,CRESCENT.rOut+.35));
   const crest=.5+.5*Math.sin(wrap*2.6+.7);
   const noise=Math.sin(x*9.3+Math.sin(z*7.1)*1.7)*.5+Math.sin(x*21+z*17)*.25;
@@ -66,29 +60,24 @@ export function crescentHeight(x:number,z:number){
   // curve made the entire inner bank a smooth retaining wall with no beach.
   const shelf=smooth(shapedR,.50,.68)*(1-smooth(shapedR,1.24,1.44));
   const ridge=smooth(shapedR,.88,1.06)*(1-smooth(shapedR,1.18,1.40));
-  const land=open*(shelf*.34+ridge*(.50+.15*crest+.045*noise));
-  return gradeAccessTerrain(x,z,bed+land+.009*Math.sin(x*15)*Math.cos(z*13)*(1-open*ridge));
-}
-
-/** Rock variants with different noise frequencies and phases, so cliff
- * outcrops and boulders never read as the same shape rescaled. */
-function boulderGeometry(seed:number){
-  const rnd=seeded(seed);
-  const g=new THREE.SphereGeometry(1,32,20),p=g.attributes.position;
-  const f1=2.4+rnd()*1.8,f2=2.2+rnd()*2.4,f3=2.8+rnd()*1.8,f4=4.5+rnd()*3.5,ph=rnd()*6;
-  for(let i=0;i<p.count;i++){
-    const x=p.getX(i),y=p.getY(i),z=p.getZ(i);
-    const v=1+.19*Math.sin(x*f1+ph+z*f2)*Math.cos(y*f3-z)+.10*Math.sin(x*f4+y*5)*Math.cos(z*7-y);
-    const shelf=y*.78+.045*Math.sin(y*25+x*3+z*2);
-    p.setXYZ(i,x*v,shelf*v,z*v);
-  }g.computeVertexNormals();return g;
+  const land=open*(shelf*.34+ridge*(.33+.23*crest+.045*noise));
+  // A gentle sand profile continues below the waterline; multiplying another
+  // narrow ridge made the "beach" a raised lump with a vertical submerged rim.
+  const beachProfile=.145-.95*Math.pow(shapedR-.96,2);
+  const beachRamp=smooth(shapedR,.48,.67)*(1-smooth(shapedR,1.42,1.64));
+  const sandBank=bed+(beachProfile-bed)*open*beachRamp;
+  let natural=THREE.MathUtils.lerp(bed+land,sandBank,beachInfluence(a));
+  // A single high outcrop behind the village replaces the equal-height ring.
+  const backRidge=smooth(shapedR,1.10,1.25)*(1-smooth(shapedR,1.33,1.49));
+  natural+=open*headlandInfluence(a)*backRidge*.25;
+  return gradeAccessTerrain(x,z,natural+.006*Math.sin(x*15)*Math.cos(z*13)*(1-open*ridge));
 }
 
 /** Programmatic crescent bay. Keeps island, lighthouse, cabins, boat and fish
  * as separately authored objects so each can be tuned without re-baking. */
-export function createCrescentBay(time:{value:number}){
+export function createCrescentBay(time:{value:number},artAssets?:CoastalArtAssets){
   const palette=makeCoastalMaterials(time,HARBOR.water,.40),m=palette.materials;
-  m.rock.color.set('#f3eee2');m.stone.color.set('#e8e0ce');
+  m.rock.color.set('#e5dfd0');m.stone.color.set('#e8e0ce');m.leaf.side=THREE.DoubleSide;
   // The shared 256 px stone tile is stretched once across the whole key, so at
   // close range the cliffs read as smooth clay. Tile it and deepen the bump on
   // the two surfaces that are mostly rock.
@@ -103,37 +92,37 @@ export function createCrescentBay(time:{value:number}){
       material[key]=texture;extraTextures.push(texture);
     }
   };
-  retile(m.rock,7);
+  retile(m.rock,3.5);
   // Separate limestone cliffs, warm beach and cooler submerged rock.
   const terrainMaterial=m.rock.clone();terrainMaterial.vertexColors=true;terrainMaterial.color.set('#ffffff');
-  retile(terrainMaterial,13);
-  const onTerrainCompile=m.rock.onBeforeCompile;
-  terrainMaterial.onBeforeCompile=(shader,renderer)=>{
-    onTerrainCompile.call(m.rock,shader,renderer);
-    shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
-      float strata=sin(tideP.y*135.0+sin(tideP.x*23.0+tideP.z*18.0)*1.6);
-      diffuseColor.rgb*=1.0+strata*.05;
-      // Vertical erosion flutes, only on the steep faces: without them a cliff
-      // is just a smooth wall with a few horizontal lines painted on.
-      float steep=1.0-smoothstep(.22,.78,tideN.y);
-      float flutes=.5+.5*sin(tideP.y*64.0+sin(tideP.x*37.0+tideP.z*29.0)*2.6);
-      diffuseColor.rgb*=1.0-steep*(.14-.10*flutes);
-    `);
-  };
-  terrainMaterial.customProgramCacheKey=()=> 'crescent-limestone-v02';
+  retile(terrainMaterial,7);
+  terrainMaterial.normalScale.set(.65,.65);m.rock.normalScale.set(.8,.8);
+  terrainMaterial.onBeforeCompile=m.rock.onBeforeCompile;
+  if(artAssets)applyCoastalScan(terrainMaterial,artAssets.rock.material as THREE.MeshStandardMaterial);
+  else limestoneSurface(terrainMaterial,'crescent-cliff-v16');
+  limestoneSurface(m.rock,'crescent-outcrop-v16');
   const root=new THREE.Group();root.name='CrescentBayStudy';
   const geometries=new Set<THREE.BufferGeometry>();
-  const box=new RoundedBoxGeometry(1,1,1,2,.045),rocks=[boulderGeometry(11),boulderGeometry(37),boulderGeometry(83)];
-  const leaf=new THREE.SphereGeometry(1,6,4),cylinder=new THREE.CylinderGeometry(1,1,1,12);
-  [box,...rocks,leaf,cylinder].forEach(g=>geometries.add(g));
+  const box=new RoundedBoxGeometry(1,1,1,2,.045),rocks=[limestoneGeometry(11),limestoneGeometry(37),limestoneGeometry(83)];
+  const leaf=new THREE.SphereGeometry(1,8,6),blade=leafBladeGeometry(),cylinder=new THREE.CylinderGeometry(1,1,1,12);
+  [box,...rocks,leaf,blade,cylinder].forEach(g=>geometries.add(g));
   const batches=new Map<string,{geometry:THREE.BufferGeometry;material:THREE.Material;pieces:Piece[];heightfield:boolean}>();
   const add=(name:string,geometry:THREE.BufferGeometry,material:THREE.Material,piece:Piece,heightfield=true)=>{
-    if(/groundcover|scrub|olive-leaves|cypress|lavender|bay-shrubs|wildflowers/.test(name)&&keepAccessClear(piece.position[0],piece.position[2],.025))return;
+    if(/groundcover|scrub|olive-leaves|cypress|lavender|bay-shrubs|wildflowers/.test(name)){
+      const x=piece.position[0],z=piece.position[2];
+      if(keepAccessClear(x,z,.025))return;
+      if(beachInfluence(Math.atan2(z-CRESCENT.cz,x-CRESCENT.cx))>.45&&crescentHeight(x,z)<.28)return;
+    }
     if(!batches.has(name))batches.set(name,{geometry,material,pieces:[],heightfield});
     batches.get(name)!.pieces.push(piece);
   };
   const cube=(position:V,scale:V,kind:keyof CoastalMaterials='stone',rotation:V=[0,0,0],color?:string)=>add('box-'+kind,box,m[kind],{position,scale,rotation,color});
-  const stone=(x:number,y:number,z:number,sx:number,sy:number,sz:number,angle:number,color?:string)=>{if(keepAccessClear(x,z,Math.max(sx,sz)))return;const v=Math.floor(random()*3);add('boulders-'+v,rocks[v],m.rock,{position:[x,y,z],scale:[sx,sy,sz],rotation:[Math.sin(angle)*.18,angle,Math.cos(angle)*.13],color});};
+  const stone=(x:number,y:number,z:number,sx:number,sy:number,sz:number,angle:number,color?:string)=>{
+    if(beachInfluence(Math.atan2(z-CRESCENT.cz,x-CRESCENT.cx))>.6&&crescentHeight(x,z)>.03&&Math.max(sx,sz)>.035)return;
+    const extent=Math.max(sx,sz)*1.15;
+    if(keepAccessClear(x,z,extent)||Math.abs(x)+extent>1.54||Math.abs(z)+extent>1.54)return;
+    const v=Math.floor(random()*3);add('boulders-'+v,rocks[v],m.rock,{position:[x,y,z],scale:[sx,sy,sz],rotation:[Math.sin(angle)*.18,angle,Math.cos(angle)*.13],color});
+  };
   const mesh=(geometry:THREE.BufferGeometry,material:THREE.Material,position:V=[0,0,0],parent:THREE.Object3D=root)=>{
     geometries.add(geometry);const object=new THREE.Mesh(geometry,material);object.position.fromArray(position);object.castShadow=object.receiveShadow=true;parent.add(object);return object;
   };
@@ -147,25 +136,16 @@ export function createCrescentBay(time:{value:number}){
     const [x,z]=roundedSquarePoint(fp.getX(i),fp.getZ(i));
     fp.setXYZ(i,x,crescentHeight(x,z),z);
   }
-  // Rock detail: high-frequency displacement only on steep faces. The graded
-  // terrace, the paths and the doorsteps stay exactly where the layout put
-  // them, because their slope is near zero.
-  for(let j=1;j<segments;j++)for(let i=1;i<segments;i++){
-    const k=j*row+i,h=fp.getY(k);
-    const slope=Math.hypot(fp.getY(k+1)-fp.getY(k-1),fp.getY(k+row)-fp.getY(k-row))/(2*cell);
-    const steep=smooth(slope,.45,1.35);
-    if(steep<=0)continue;
-    const x=fp.getX(k),z=fp.getZ(k);
-    const grain=Math.sin(x*61+z*43)*Math.sin(z*71-x*37)*.62+Math.sin(x*133-z*97)*.38;
-    fp.setY(k,h+steep*grain*.017);
-  }
+  sculptCliffs(floor);
   floor.computeVertexNormals();
-  const colors:number[]=[],sandColor=new THREE.Color('#e9d9b8'),cliffColor=new THREE.Color('#e2dfd4'),deepColor=new THREE.Color('#749892');
+  const colors:number[]=[],sandColor=new THREE.Color('#ead9b9'),cliffColor=new THREE.Color('#cbc9b9'),deepColor=new THREE.Color('#749892');
   const normal=floor.attributes.normal;
   for(let i=0;i<fp.count;i++){
     const h=fp.getY(i),n=normal.getY(i),c=new THREE.Color();
     if(h<HARBOR.water-.15)c.copy(deepColor).lerp(sandColor,smooth(h,-.50,-.12));
     else c.copy(cliffColor).lerp(sandColor,smooth(n,.75,.98));
+    const shoreAngle=Math.atan2(fp.getZ(i)-CRESCENT.cz,fp.getX(i)-CRESCENT.cx);
+    c.lerp(sandColor,beachInfluence(shoreAngle)*smooth(h,-.20,.01));
     c.multiplyScalar(.94+.06*Math.sin(fp.getX(i)*19+fp.getZ(i)*14));
     // Cheap baked ambient occlusion from the grid itself: a vertex sitting
     // below its four neighbours is in a fold, and folds are what makes a cliff
@@ -179,9 +159,12 @@ export function createCrescentBay(time:{value:number}){
     colors.push(c.r,c.g,c.b);
   }
   floor.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
-  const landscape=mesh(floor,terrainMaterial);landscape.name='CrescentShore';
+  // The heightfield reaches the keycap cut face. Close its boundary down into
+  // the plinth; a lone top surface exposed a false underwater arch at low views.
+  const solidTerrain=closeTerrainVolume(floor,HARBOR.bottom+.10);floor.dispose();
+  const landscape=mesh(solidTerrain,terrainMaterial);landscape.name='CrescentShore';
   // Shore boulders along both island edges, skipping the open channel.
-  for(let i=0;i<120;i++){
+  for(let i=0;i<(artAssets?32:120);i++){
     const a=(random()*2-1)*Math.PI*.94,s=random()<.5?CRESCENT.rIn-.10-random()*.10:CRESCENT.rOut+.06+random()*.12;
     const [x,,z]=polar(a,s);
     if(Math.abs(Math.atan2(Math.sin(a-CRESCENT.openAt),Math.cos(a-CRESCENT.openAt)))<.7)continue;
@@ -207,7 +190,7 @@ export function createCrescentBay(time:{value:number}){
     add('pebbles',rocks[Math.floor(random()*3)],m.stone,{position:[x,h+s*.3,z],scale:[s*1.3,s*.6,s],rotation:[0,random()*6,0],color:random()>.5?'#e8dec6':'#c1bba7'},false);
   }
   // Layered cliff outcrops break the mathematically smooth island silhouette.
-  for(let i=0;i<310;i++){
+  for(let i=0;i<(artAssets?35:310);i++){
     const a=random()*Math.PI*2,wrap=Math.abs(Math.atan2(Math.sin(a-CRESCENT.openAt),Math.cos(a-CRESCENT.openAt)));
     if(wrap<.88)continue;
     const r=.83+random()*.34,[x,,z]=polar(a,r),y=crescentHeight(x,z);
@@ -216,7 +199,7 @@ export function createCrescentBay(time:{value:number}){
     stone(x,y-s*.27,z,s*(1+random()*.4),s*(.7+random()*.5),s,random()*6,['#f3efe5','#dddcd2','#ece6d7','#c5c7bd'][i%4]);
   }
   // Exposed strata on the inner cliff; staggered rows avoid a smooth dam wall.
-  for(let row=0;row<4;row++)for(let i=0;i<90;i++){
+  for(let row=0;row<(artAssets?0:4);row++)for(let i=0;i<90;i++){
     const a=i/90*Math.PI*2+(random()-.5)*.045;
     const wrap=Math.abs(Math.atan2(Math.sin(a-CRESCENT.openAt),Math.cos(a-CRESCENT.openAt)));
     if(wrap<1.12)continue;
@@ -226,8 +209,15 @@ export function createCrescentBay(time:{value:number}){
     stone(x,y-.008,z,s*1.5,s*.85,s,random()*6,['#eee9dc','#d9d8cb','#e1ddce','#c5c6ba'][i%4]);
   }
   // Two small cottages share one transform for walls, roof, doors and tiles.
+  for(let i=0;i<(artAssets?16:95);i++){
+    const a=2.3+random()*1.75,r=1.21+random()*.13,[x,,z]=polar(a,r),y=crescentHeight(x,z);
+    if(y<HARBOR.water-.10)continue;
+    const s=.035+random()*.045;
+    stone(x,y-s*.35,z,s*1.25,s*.85,s,random()*6,['#dedbcf','#eee9db','#c8c8bb'][i%3]);
+  }
   // Cottage window glass: warms up at dusk so the village looks inhabited.
   const windowMaterial=new THREE.MeshStandardMaterial({color:'#2e4a50',emissive:'#ffbf6e',emissiveIntensity:0,roughness:.4});
+  const windowLights:THREE.PointLight[]=[];
   // Sized so a fishing boat (~.62 long) is about as long as a cottage is wide.
   const cabins=COTTAGES;
   for(const [n,c] of cabins.entries()){
@@ -240,6 +230,22 @@ export function createCrescentBay(time:{value:number}){
       cornerY(-c.w/2+.03,-c.d/2+.03),cornerY(c.w/2-.03,-c.d/2+.03),
       cornerY(-c.w/2+.03,c.d/2-.03),cornerY(c.w/2-.03,c.d/2-.03),
     )+.015;
+    if(artAssets?.cottage){
+      const cottage=artAssets.cottage.clone(true);cottage.name='CoastalCottage-'+n;
+      cottage.position.set(cx,base,cz);cottage.rotation.y=ry;cottage.scale.set(c.w/.32,c.h/.24,c.d/.26);
+      cottage.traverse(o=>{
+        if(o instanceof THREE.Mesh){o.castShadow=o.receiveShadow=true;
+          if(o.name==='CottageWindowPanes')o.material=windowMaterial;
+        }
+      });
+      root.add(cottage);
+      // A bounded, non-shadowed spill beside the visible window warms its
+      // frame and adjacent stone without lighting the entire island.
+      const [lx,,lz]=local(-c.w/2-.025,0);
+      const spill=new THREE.PointLight('#ffc78a',0,.50,2);spill.name='CottageWindowSpill-'+n;
+      spill.position.set(lx,base+c.h*.62,lz);root.add(spill);windowLights.push(spill);
+      continue;
+    }
     cube([cx,base-.024,cz],[c.w+.065,.055,c.d+.065],'stone',[0,ry,0]);
     cube([cx,base+c.h/2,cz],[c.w,c.h,c.d],'plaster',[0,ry,0]);
     const rise=c.w*.32,half=c.w/2+.04,slope=Math.atan2(rise,half),len=Math.hypot(half,rise);
@@ -305,6 +311,11 @@ export function createCrescentBay(time:{value:number}){
   const towerAngle=TOWER.a,towerR=TOWER.r,[tx,,tz]=polar(towerAngle,towerR);
   const tower=new THREE.Group(),ty=TERRACE+.012;tower.position.set(tx,ty,tz);tower.rotation.y=Math.atan2(-Math.cos(towerAngle),-Math.sin(towerAngle));tower.scale.set(.80,1.15,.80);tower.name='Lighthouse';root.add(tower);
   const towerCourt=mesh(new THREE.CylinderGeometry(.17,.18,.045,40),m.stone,[tx,TERRACE-.01,tz]);towerCourt.name='LighthouseCourt';
+  if(artAssets?.lighthouse){
+    const shell=artAssets.lighthouse.clone(true);shell.name='BlenderLighthouseArchitecture';
+    shell.traverse(o=>{if(o instanceof THREE.Mesh)o.castShadow=o.receiveShadow=true;});
+    tower.add(shell);
+  }else{
   mesh(new THREE.CylinderGeometry(.15,.17,.025,48),m.stone,[0,.0125,0],tower);
   mesh(new THREE.CylinderGeometry(.066,.10,.575,48),m.plaster,[0,.3125,0],tower);
   const towerDoor=mesh(box,m.teal,[0,.095,.099],tower);towerDoor.scale.set(.045,.14,.014);towerDoor.name='LighthouseDoor';
@@ -313,6 +324,7 @@ export function createCrescentBay(time:{value:number}){
     const o=mesh(box,m.glass,[0,y,.104-y*.048],tower);o.scale.set(.026,.05,.011);
   }
   mesh(new THREE.CylinderGeometry(.125,.107,.03,48),m.stone,[0,.615,0],tower);
+  }
   mesh(new THREE.CylinderGeometry(.06,.06,.13,16),m.glass,[0,.70,0],tower);
   // Unlit by day: a dark amber lens inside the glass, not a cream ball. Without
   // emissive a pale sphere still reads as "switched on" under a noon sun.
@@ -327,10 +339,11 @@ export function createCrescentBay(time:{value:number}){
   const haloMaterial=new THREE.SpriteMaterial({map:haloTexture,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending});
   const halo=new THREE.Sprite(haloMaterial);halo.scale.setScalar(.34);halo.position.set(0,.70,0);halo.name='CrescentLanternHalo';tower.add(halo);
   const beacon=new THREE.Group();beacon.position.set(0,.70,0);beacon.name='LighthouseBeacon';tower.add(beacon);
-  const {beam,material:beamMaterial}=createLighthouseBeam();
+  const {beam,material:beamMaterial,setStrength:setBeamStrength}=createLighthouseBeam();
   geometries.add(beam.geometry);beacon.add(beam);
   const searchLight=new THREE.SpotLight('#ffe0a0',0,4.5,.14,.55,1.3);searchLight.name='LighthouseSearchlight';beacon.add(searchLight);
   const beamTarget=new THREE.Object3D();beamTarget.position.set(0,-.08,3.8);beacon.add(beamTarget);searchLight.target=beamTarget;
+  if(!artAssets?.lighthouse){
   for(let i=0;i<10;i++){
     const a=i*Math.PI/5;
     mesh(new THREE.CylinderGeometry(.0022,.0022,.06,6),m.metal,[Math.cos(a)*.106,.665,Math.sin(a)*.106],tower);
@@ -338,6 +351,7 @@ export function createCrescentBay(time:{value:number}){
   }
   for(const y of [.645,.688]){const ring=mesh(new THREE.TorusGeometry(.106,.0022,5,48),m.metal,[0,y,0],tower);ring.rotation.x=Math.PI/2;}
   mesh(new THREE.ConeGeometry(.095,.085,24),m.roof,[0,.812,0],tower);
+  }
   // Landing: shore steps down to a walkway, ending in a T-shaped finger dock
   // with mooring posts, a rope coil and a gull — a place people can actually
   // walk onto and tie a boat to, not a floating dead platform.
@@ -345,13 +359,19 @@ export function createCrescentBay(time:{value:number}){
   {
     const [sx,,sz]=polar(jettyA,CRESCENT.rIn-.01),[ex,,ez]=polar(jettyA,PIER_HEAD);
     const axis=Math.atan2(ez-sz,ex-sx),planks=11;
+    const perp=axis+Math.PI/2,platW=.46;
+    if(artAssets?.dock){
+      const dock=artAssets.dock.clone(true);dock.name='DetailedHarborDock';
+      dock.position.set(sx,deckY,sz);dock.rotation.y=Math.atan2(ex-sx,ez-sz);
+      dock.traverse(o=>{if(o instanceof THREE.Mesh)o.castShadow=o.receiveShadow=true;});
+      root.add(dock);
+    }else{
     for(let i=0;i<planks;i++){
       const u=i/(planks-1),x=sx+(ex-sx)*u,z=sz+(ez-sz)*u;
       cube([x,deckY,z],[.17,.014,.062],'wood',[0,axis+Math.PI/2,0],i%3?'#f1e4c7':'#c8b89a');
       cube([x,deckY-.012,z],[.13,.010,.045],'darkwood',[0,axis+Math.PI/2,0]);
     }
     // T platform at the dock head, perpendicular to the walkway.
-    const perp=axis+Math.PI/2,platW=.46;
     for(let i=0;i<7;i++){
       const u=(i/6-.5)*platW,x=ex+Math.cos(perp)*u,z=ez+Math.sin(perp)*u;
       cube([x,deckY,z],[.062,.014,.19],'wood',[0,axis,0],i%3?'#dfc9a3':'#c9ad84');
@@ -380,15 +400,20 @@ export function createCrescentBay(time:{value:number}){
       const x=ex-Math.cos(axis)*(.10+i*.085),z=ez-Math.sin(axis)*(.10+i*.085);
       cube([x,deckY-.03-i*.028,z],[.30,.020,.085],'stone',[0,axis,0]);
     }
+    }
     // Designed switchback: fixed endpoints and bounded risers, independent
     // of the natural slope. The terrain is graded beneath the same route.
     for(const step of stairTreads()){
       const x=(step.a.x+step.b.x)/2,z=(step.a.z+step.b.z)/2;
       const length=Math.hypot(step.b.x-step.a.x,step.b.z-step.a.z);
-      add('access-stairs',box,m.stone,{position:[x,step.top-.018,z],scale:[.14,.036,length+.008],rotation:[0,Math.atan2(step.b.x-step.a.x,step.b.z-step.a.z),0],color:'#ddd3bc'});
+      // Consecutive treads meet at their boundaries. Extra length makes the
+      // flat first flight overlap itself at exactly the same depth.
+      add('access-stairs',box,m.stone,{position:[x,step.top-.018,z],scale:[.14,.036,length],rotation:[0,Math.atan2(step.b.x-step.a.x,step.b.z-step.a.z),0],color:'#ddd3bc'});
     }
     for(const p of SHORE_STAIRS){
-      add('access-landings',box,m.stone,{position:[p.x,p.y-.025,p.z],scale:[.16,.05,.16],color:'#e3dac5'});
+      // A small stone threshold sits above both the adjoining tread and the
+      // timber deck; identical top heights previously fought in the overlap.
+      add('access-landings',box,m.stone,{position:[p.x,p.y-.025+.003,p.z],scale:[.16,.05,.16],color:'#e3dac5'});
     }
     // A gull perched on the far mooring post.
     const gull=new THREE.Group();
@@ -402,7 +427,7 @@ export function createCrescentBay(time:{value:number}){
   // Vegetation stays subordinate to the crescent silhouette. The stair line
   // to the landing and the path stay clear of sprouting grass.
   const nearStair=(a:number,r:number)=>Math.abs(Math.atan2(Math.sin(a-jettyA),Math.cos(a-jettyA)))<.12&&r>.60&&r<1.06;
-  for(let i=0;i<700;i++){
+  for(let i=0;i<(artAssets?220:700);i++){
     const a=(random()*2-1)*Math.PI,r=CRESCENT.rIn-.02+random()*(CRESCENT.rOut-CRESCENT.rIn+.06);
     const [x,,z]=polar(a,r);
     if(Math.abs(Math.atan2(Math.sin(a-CRESCENT.openAt),Math.cos(a-CRESCENT.openAt)))<.75)continue;
@@ -421,30 +446,39 @@ export function createCrescentBay(time:{value:number}){
   }
   // Broad scrub cushions and olive crowns give land a continuous planting
   // layer. Keep the lagoon, lighthouse and cottage entrances readable.
-  for(let patch=0;patch<220;patch++){
+  for(let patch=0;patch<(artAssets?55:220);patch++){
     const a=random()*Math.PI*2,r=.91+random()*.23,[x,,z]=polar(a,r),y=crescentHeight(x,z);
     if(y<HARBOR.water+.10||Math.hypot(x-tx,z-tz)<.18)continue;
     if(cabins.some(c=>{const [hx,,hz]=polar(c.a,c.r);return Math.hypot(x-hx,z-hz)<.20;}))continue;
     if(nearStair(a,r))continue;
     const spread=.025+random()*.04;
-    for(let i=0;i<18;i++){
+    add('scrub-core',leaf,m.leaf,{position:[x,y+.018,z],scale:[spread*.85,.019,spread*.75],color:'#526b40'},false);
+    for(let i=0;i<38;i++){
       const a=i*2.399963,r=spread*Math.sqrt(random());
-      add('scrub-cushions',leaf,m.leaf,{position:[x+Math.cos(a)*r,y+.026+random()*.025,z+Math.sin(a)*r],scale:[.027,.021,.024],rotation:[0,a,0],color:['#4e6339','#697d49','#879452','#435b36'][i%4]},false);
+      add('scrub-cushions',blade,m.leaf,{position:[x+Math.cos(a)*r,y+.026+random()*.025,z+Math.sin(a)*r],scale:[.046,.04,.05],rotation:[(random()-.5)*1.2,a,(random()-.5)*.7],color:['#4e6339','#697d49','#879452','#435b36'][i%4]},false);
     }
     if(patch%4===0)for(let i=0;i<7;i++)add('wildflowers',leaf,m.ivory,{position:[x+(random()-.5)*.07,y+.055+random()*.025,z+(random()-.5)*.07],scale:[.004,.003,.004],color:patch%8?'#d9bd70':'#b495ad'},false);
   }
-  for(const [a,r] of [[-2.85,1.04],[-1.85,1.05],[-.78,1.06],[3.10,1.01]] as const){
+  // Deliberately planted olive trees sit beyond the walking strip. Each crown
+  // grows from visible limbs, with thin silver-green blades instead of balls.
+  for(const [a,r] of [[-2.68,1.20],[-1.65,1.24],[-.63,1.18],[2.60,1.15]] as const){
+    if(artAssets)break;
     const [x,,z]=polar(a,r),y=crescentHeight(x,z);
-    if(keepAccessClear(x,z,.13))continue;
-    const tree=new THREE.Group();tree.position.set(x,y,z);root.add(tree);
-    const trunk=mesh(new THREE.CylinderGeometry(.009,.016,.19,8),m.darkwood,[0,.095,0],tree);trunk.rotation.z=.15;
+    if(y<HARBOR.water+.10||keepAccessClear(x,z,.09))continue;
+    const tree=new THREE.Group();tree.name='OliveTree';tree.position.set(x,y,z);root.add(tree);
+    const limb=(points:V[],radius:number)=>{
+      const curve=new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(...p)));
+      const o=mesh(new THREE.TubeGeometry(curve,9,radius,7,false),m.darkwood,[0,0,0],tree);o.userData.ignoreHeightfield=true;
+    };
+    limb([[0,0,0],[.012,.08,0],[-.014,.16,.008],[0,.21,0]],.010);
     for(let branch=0;branch<4;branch++){
-      const a=branch*Math.PI/2+.3,b=mesh(new THREE.CylinderGeometry(.004,.007,.12,6),m.darkwood,[Math.cos(a)*.027,.19,Math.sin(a)*.027],tree);
-      b.rotation.set(Math.sin(a)*.65,0,-Math.cos(a)*.65);
-    }
-    for(let i=0;i<160;i++){
-      const a=i*2.399963,r=Math.sqrt(random())*.115;
-      add('olive-leaves',leaf,m.leaf,{position:[x+Math.cos(a)*r,y+.22+random()*.07,z+Math.sin(a)*r*.8],scale:[.022,.012,.018],rotation:[random(),a,random()],color:['#526943','#74855b','#9aa57b','#435c39'][i%4]},false);
+      const angle=branch*Math.PI/2+.4,cx=Math.cos(angle)*.085,cz=Math.sin(angle)*.085,cy=.22+random()*.045;
+      limb([[0,.13,0],[cx*.35,.19,cz*.35],[cx,cy,cz]],.0045);
+      add('olive-core',leaf,m.leaf,{position:[x+cx,y+cy+.014,z+cz],scale:[.065,.029,.052],rotation:[0,angle,0],color:'#4e6749'},false);
+      for(let i=0;i<125;i++){
+        const direction=i*2.399963,rr=Math.sqrt(random())*.068;
+        add('olive-leaves',blade,m.leaf,{position:[x+cx+Math.cos(direction)*rr,y+cy+.015+random()*.035,z+cz+Math.sin(direction)*rr*.8],scale:[.027+random()*.012,.028,.034],rotation:[(random()-.5)*.7,direction,(random()-.5)*.6],color:['#627858','#839477','#a4ae8f','#506a4b'][i%4]},false);
+      }
     }
   }
   // Continuous main road and short branches reach every entrance.
@@ -460,18 +494,18 @@ export function createCrescentBay(time:{value:number}){
   paved(MAIN_PATH);HOUSE_PATHS.forEach(paved);
   // A low stone parapet protects the lagoon edge; leave the stair entrance open.
   for(let i=1;i<MAIN_PATH.length;i++){
-    const angle=-3.45+(i-.5)/99*2.77,p=islandPoint(angle,.855);
+    const angle=-3.45+(i-.5)/99*2.77,p=islandPoint(angle,.878);
     if(SHORE_STAIRS.slice(1).some((b,j)=>nearestOnSegment(p.x,p.z,SHORE_STAIRS[j],b).distance<.13))continue;
     const bottom=Math.min(crescentHeight(p.x,p.z),TERRACE),height=TERRACE+.07-bottom;
-    add('path-parapet',box,m.stone,{position:[p.x,bottom+height/2,p.z],scale:[.027,height,.855*2.77/99+.005],rotation:[0,-angle,0],color:i%4?'#d7ceb9':'#e6ddc6'});
+    add('path-parapet',box,m.stone,{position:[p.x,bottom+height/2,p.z],scale:[.027,height,.878*2.77/99+.005],rotation:[0,-angle,0],color:i%4?'#d7ceb9':'#e6ddc6'});
   }
   // A continuous paved apron joins the inward-facing lighthouse door.
   const tdoor=islandPoint(TOWER.a,TOWER.r-.105);paved([islandPoint(TOWER.a,.94),tdoor]);
-  for(const [a,r] of [[-2.02,1.0],[2.95,.98]] as const){
+  for(const [a,r] of [[-.85,1.28],[-2.35,1.28]] as const){
     const [x,,z]=polar(a,r),y=crescentHeight(x,z);
     for(let i=0;i<150;i++){
       const t=random(),angle=i*2.399963,rr=(1-t)*.04*Math.sqrt(random());
-      add('cypress-leaves',leaf,m.leaf,{position:[x+Math.cos(angle)*rr,y+.05+t*.36,z+Math.sin(angle)*rr],scale:[.012,.022,.011],rotation:[0,angle,0],color:['#586d3f','#657c49','#7b8c58'][i%3]},false);
+      add('cypress-leaves',blade,m.leaf,{position:[x+Math.cos(angle)*rr,y+.05+t*.36,z+Math.sin(angle)*rr],scale:[.028,.035,.027],rotation:[.3,angle,1.0],color:['#586d3f','#657c49','#7b8c58'][i%3]},false);
     }
   }
   // Lavender tufts line the path and cottage fronts for a colour layer.
@@ -501,6 +535,12 @@ export function createCrescentBay(time:{value:number}){
   // Anchored lagoon boat: smooth lofted hull with a painted waterline band
   // and warm red bottom (reference-style finishing), furled sail and rigging.
   const boat=new THREE.Group();boat.name='CrescentBoat';boat.scale.setScalar(.85);
+  const hullMaterial=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.6,side:THREE.DoubleSide});
+  if(artAssets?.boat){
+    const model=artAssets.boat.clone(true);model.name='BlenderFishingBoat';
+    model.traverse(o=>{if(o instanceof THREE.Mesh)o.castShadow=o.receiveShadow=true;});
+    boat.add(model);
+  }else{
   const hp:number[]=[],hi:number[]=[],hc:number[]=[],HS=20,HC=20;
   const hullW=(t:number)=>.105*Math.pow(Math.sin(Math.PI*Math.max(.02,Math.min(.98,t))),.5)*(1+.18*t);
   const hullD=(t:number)=>.96*Math.pow(Math.sin(Math.PI*Math.max(.02,Math.min(.98,t))),.35)+.04;
@@ -514,7 +554,7 @@ export function createCrescentBay(time:{value:number}){
     }
   }
   const hull=new THREE.BufferGeometry();hull.setAttribute('position',new THREE.Float32BufferAttribute(hp,3));hull.setAttribute('color',new THREE.Float32BufferAttribute(hc,3));hull.setIndex(hi);hull.computeVertexNormals();
-  const hullMaterial=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.6,side:THREE.DoubleSide});mesh(hull,hullMaterial,[0,0,0],boat);
+  mesh(hull,hullMaterial,[0,0,0],boat);
   const deckPts:[number,number][]=[];for(const t of [.03,.16,.34,.5,.66,.84,.97])deckPts.push([(t-.5)*.62,hullW(t)]);
   const deckShape=new THREE.Shape();deckPts.forEach(([z,w],i)=>i?deckShape.lineTo(w,z):deckShape.moveTo(w,z));[...deckPts].reverse().forEach(([z,w])=>deckShape.lineTo(-w,z));deckShape.closePath();
   const boatDeck=new THREE.ShapeGeometry(deckShape);boatDeck.rotateX(-Math.PI/2);mesh(boatDeck,m.wood,[0,.04,0],boat).rotation.y=Math.PI;
@@ -537,6 +577,7 @@ export function createCrescentBay(time:{value:number}){
   mesh(box,m.wood,[0,.062,-.245],boat).scale.set(.028,.026,.10);
   const coil:V[]=[];for(let i=0;i<100;i++){const u=i/99,a=u*Math.PI*8,r=.010+u*.034;coil.push([-.07+Math.cos(a)*r,.052,.20+Math.sin(a)*r]);}tube(coil,.0018,m.rope,boat);
   const buoy=mesh(new THREE.TorusGeometry(.026,.008,8,24),m.orange,[.10,.052,-.13],boat);buoy.rotation.y=Math.PI/2;
+  }
   // Four fish with deformable bodies, shared with the coastal study pipeline.
   const fish=new THREE.Group();fish.name='CrescentFish';
   const finShape=new THREE.Shape();finShape.moveTo(0,0);finShape.lineTo(-.037,.026);finShape.lineTo(-.028,0);finShape.lineTo(-.037,-.026);finShape.closePath();
@@ -557,6 +598,7 @@ export function createCrescentBay(time:{value:number}){
     fishActors.push({body,rest,tail,fins});
     fish.add(animal);
   }
+  const disposeArt=artAssets?addCoastalArt(root,artAssets,crescentHeight):undefined;
   root.updateMatrixWorld(true);
-  return {root,boat,fish,fishActors,beacon,beamMaterial,searchLight,footprint:bayFootprint(),lanternMaterial,lanternLight,haloMaterial,windowMaterial,dispose(){root.traverse(object=>{if(object instanceof THREE.InstancedMesh)object.dispose();});geometries.forEach(g=>g.dispose());palette.dispose();terrainMaterial.dispose();extraTextures.forEach(t=>t.dispose());hullMaterial.dispose();lanternMaterial.dispose();haloMaterial.dispose();haloTexture.dispose();windowMaterial.dispose();beamMaterial.dispose();searchLight.dispose();}};
+  return {root,boat,fish,fishActors,beacon,beamMaterial,setBeamStrength,searchLight,footprint:bayFootprint(),lanternMaterial,lanternLight,haloMaterial,windowMaterial,windowLights,dispose(){disposeArt?.();root.traverse(object=>{if(object instanceof THREE.InstancedMesh)object.dispose();});geometries.forEach(g=>g.dispose());palette.dispose();terrainMaterial.dispose();extraTextures.forEach(t=>t.dispose());hullMaterial.dispose();lanternMaterial.dispose();haloMaterial.dispose();haloTexture.dispose();windowMaterial.dispose();beamMaterial.dispose();searchLight.dispose();}};
 }

@@ -1,9 +1,12 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
-export default defineConfig({
+export default defineConfig(({mode})=>({
+  base: loadEnv(mode, '.', 'VITE_').VITE_BASE_PATH || '/',
   plugins: [react()],
-  server: { watch: { ignored: ['**/outputs/**', '**/work/**', '**/public/models/**'] } },
+  // Generated sources stay ignored; published model changes must be detected
+  // so new GLBs are served instead of the HTML fallback during development.
+  server: { watch: { ignored: ['**/outputs/**', '**/work/**'] } },
   build: {
     // Split the heavy 3D stack away from app code: the libraries change far
     // less often than the studies, so returning visitors keep them cached.
@@ -17,4 +20,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));

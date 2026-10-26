@@ -1,6 +1,7 @@
 import {useCallback,useEffect,useMemo,useRef} from 'react';
 import {useFrame,useThree,type ThreeEvent} from '@react-three/fiber';
 import * as THREE from 'three';
+import {useGLTF} from '@react-three/drei';
 import {createCrescentBay,BERTH,CRESCENT,DOCK} from './crescent-bay';
 import {buildHeightfield,HARBOR,type Heightfield} from './harbor-layout';
 import {createWaterDynamics} from './water-dynamics';
@@ -71,7 +72,17 @@ const lerpAngle=(a:number,b:number,t:number)=>a+Math.atan2(Math.sin(b-a),Math.co
 export default function CrescentStudy({playing,night,weather}:{playing:boolean;night:boolean;weather:WeatherKind}){
   const gl=useThree(state=>state.gl),invalidate=useThree(state=>state.invalidate),camera=useThree(state=>state.camera);
   const time=useMemo(()=>({value:0}),[]);
-  const study=useMemo(()=>createCrescentBay(time),[time]);
+  const [rockAsset,oliveAsset,cottageAsset,lighthouseAsset,boatAsset,dockAsset]=useGLTF([
+    '/models/coast-rocks/coastal-limestone.glb','/models/olive/mediterranean-olive.glb',
+    '/models/architecture/coastal-cottage.glb','/models/architecture/coastal-lighthouse.glb',
+    '/models/harbor/fishing-boat.glb','/models/harbor/timber-dock.glb',
+  ].map(path=>`${import.meta.env.BASE_URL}${path.slice(1)}`));
+  const study=useMemo(()=>{
+    let rock:THREE.Mesh|undefined;
+    rockAsset.scene.traverse(o=>{if(o instanceof THREE.Mesh&&!rock)rock=o;});
+    if(!rock)throw new Error('Coastal limestone asset has no mesh');
+    return createCrescentBay(time,{rock,olive:oliveAsset.scene,cottage:cottageAsset.scene,lighthouse:lighthouseAsset.scene,boat:boatAsset.scene,dock:dockAsset.scene});
+  },[time,rockAsset.scene,oliveAsset.scene,cottageAsset.scene,lighthouseAsset.scene,boatAsset.scene,dockAsset.scene]);
   const field=useMemo(()=>buildHeightfield(study.root,HARBOR.size,112),[study]);
   const dynamics=useMemo(()=>createWaterDynamics(gl,field,BERTH),[gl,field]);
   const boat=useRef({heave:{position:HARBOR.water,velocity:0},pitch:{position:0,velocity:0},roll:{position:0,velocity:0}});
@@ -96,6 +107,11 @@ export default function CrescentStudy({playing,night,weather}:{playing:boolean;n
   const hitProxy=useMemo(()=>{
     const mesh=new THREE.Mesh(new THREE.BoxGeometry(.26,.28,.62),new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false}));
     mesh.name='CrescentBoat';
+    // Opacity zero still participates in override-material passes (contact
+    // shadows / normals), producing a rectangular ghost around the boat.
+    // Mesh.raycast remains active when invisible: keep the enlarged tap target
+    // entirely out of rendering, including the first cached shadow capture.
+    mesh.visible=false;
     return mesh;
   },[]);
   useEffect(()=>()=>{hitProxy.geometry.dispose();(hitProxy.material as THREE.Material).dispose();},[hitProxy]);
@@ -342,19 +358,21 @@ export default function CrescentStudy({playing,night,weather}:{playing:boolean;n
     // The lamp is glass by day; a click gives three deliberate pulses.
     study.lanternMaterial.emissiveIntensity=THREE.MathUtils.damp(study.lanternMaterial.emissiveIntensity,night?1.6:pulse*2.4,3,delta);
     // Evening lantern glow: light and halo breathe very slightly, never flicker hard.
-    const glow=night?1.35+.06*Math.sin(t*1.7):pulse*2.6;
+    const glow=night?.95+.035*Math.sin(t*1.7):pulse*2.6;
     study.lanternLight.intensity=THREE.MathUtils.damp(study.lanternLight.intensity,glow,3,delta);
-    study.haloMaterial.opacity=THREE.MathUtils.damp(study.haloMaterial.opacity,night?.55+.05*Math.sin(t*1.7+.6):pulse*.75,3,delta);
+    study.haloMaterial.opacity=THREE.MathUtils.damp(study.haloMaterial.opacity,night?.34+.025*Math.sin(t*1.7+.6):pulse*.75,3,delta);
     study.windowMaterial.emissiveIntensity=THREE.MathUtils.damp(study.windowMaterial.emissiveIntensity,night?.95:0,3,delta);
+    study.windowLights.forEach(light=>{light.intensity=THREE.MathUtils.damp(light.intensity,night?.035:0,3,delta);});
     // Beam sweeps faster while flashing, and is only visible when lit.
-    study.beacon.rotation.y+=delta*(pulse>0?.95:.24);
-    study.beamMaterial.uniforms.strength.value=THREE.MathUtils.damp(study.beamMaterial.uniforms.strength.value,night?1:pulse*.85,3,delta);
+    if(playing)study.beacon.rotation.y+=delta*(pulse>0?.95:.24);
+    study.setBeamStrength(THREE.MathUtils.damp(study.beamMaterial.uniforms.strength.value,night?1:pulse*.85,3,delta));
+    study.beamMaterial.uniforms.haze.value=THREE.MathUtils.damp(study.beamMaterial.uniforms.haze.value,weather==='mist'?1.8:rainy?1.2:.8,3,delta);
     study.searchLight.intensity=THREE.MathUtils.damp(study.searchLight.intensity,night?3.5:pulse*3.5,3,delta);
     if(import.meta.env.DEV){
       const d=gl.domElement.dataset;d.beaconAngle=String(study.beacon.rotation.y);d.beaconStrength=String(study.beamMaterial.uniforms.strength.value);d.lanternEmissive=String(study.lanternMaterial.emissiveIntensity);d.searchLightIntensity=String(study.searchLight.intensity);
       d.flash=String(flash.current);d.boatMode=boatMode.current;d.boatX=String(bx);d.boatZ=String(bz);d.boatClearance=String(hullClearance(bx,bz,bh,field).toFixed(4));d.fishScared=String(startle.current);
       d.boatTime=String(t);d.fishTime=String(t);d.fishCount='4';d.study='procedural-crescent-v09';d.cameraKind=camera.type;d.cameraZoom=camera instanceof THREE.OrthographicCamera?String(camera.zoom):'perspective';
-      d.waterHeight=String(dynamics.probe.height);d.waterSlope=String(dynamics.probe.slopeX);d.waveSteps=String(dynamics.steps);d.waveReads=String(dynamics.reads);d.waveErrors=String(d.readErrors);d.waveImpulses=String(dynamics.impulses);
+      d.waterHeight=String(dynamics.probe.height);d.waterSlope=String(dynamics.probe.slopeX);d.waveSteps=String(dynamics.steps);d.waveReads=String(dynamics.reads);d.waveErrors=String(dynamics.readErrors);d.waveImpulses=String(dynamics.impulses);
       d.boatHeave=String(study.boat.position.y);d.boatPitch=String(study.boat.rotation.x);d.fishTailAngle=String(study.fishActors[0].tail.rotation.y);d.fishBend=String(study.fishActors[0].body.userData.bend??0);
     }
   });

@@ -60,6 +60,17 @@ test('the crescent arc raises real land opposite the opening', () => {
   assert.ok(lagoon > outer, 'lagoon should be shallower than the outer sea');
 });
 
+test('village headland rises above the open sandy tip without burying cottage pads',()=>{
+  const heights=(angle:number)=>Array.from({length:35},(_,i)=>{
+    const r=.8+i*.015;return crescentHeight(CRESCENT.cx+Math.cos(angle)*r,CRESCENT.cz+Math.sin(angle)*r);
+  });
+  const headland=Math.max(...heights(-1.55)),beach=Math.max(...heights(.18));
+  assert.ok(headland>.50,'the back of the village needs a distinct high point');
+  assert.ok(beach>.08&&beach<.25,'the sandy tip should have dry low land rather than another tall cliff');
+  assert.ok(headland-beach>.25,'the silhouette must have a visible height hierarchy');
+  for(const c of COTTAGES){const p=islandPoint(c.a,c.r);assert.ok(Math.abs(crescentHeight(p.x,p.z)-TERRACE)<.005);}
+});
+
 test('boat berth water is deep enough across the hull line', () => {
   // The terrain plane is exactly crescentHeight, and the berth area carries
   // no heightfield props (reef ring and jetty both keep their distance).
@@ -91,4 +102,25 @@ test('lighthouse beam stays visual-only and never raises the water heightfield',
   assert.equal(beam.userData.ignoreHeightfield,true);
   assert.ok(field.heights.every(height=>height===HARBOR.bottom));
   beam.geometry.dispose();material.dispose();
+});
+
+test('extinguished beam is hidden and active beam never draws into override passes',()=>{
+  const {beam,material,setStrength}=createLighthouseBeam(),scene=new THREE.Scene(),camera=new THREE.OrthographicCamera();
+  const override=new THREE.MeshNormalMaterial(),renderer={} as THREE.WebGLRenderer;
+  try{
+    assert.equal(beam.visible,false);setStrength(1);assert.equal(beam.visible,true);
+    scene.overrideMaterial=override;
+    beam.onBeforeRender(renderer,scene,camera,beam.geometry,override,null!);
+    assert.equal(beam.geometry.drawRange.count,0,'normal/depth overrides must not see a solid cone');
+    beam.onAfterRender(renderer,scene,camera,beam.geometry,override,null!);
+    assert.equal(beam.geometry.drawRange.count,Infinity);
+    scene.overrideMaterial=null;
+    // Some pass managers replace mesh.material instead of scene.overrideMaterial.
+    beam.onBeforeRender(renderer,scene,camera,beam.geometry,override,null!);
+    assert.equal(beam.geometry.drawRange.count,0);
+    beam.onAfterRender(renderer,scene,camera,beam.geometry,override,null!);
+    beam.onBeforeRender(renderer,scene,camera,beam.geometry,material,null!);
+    assert.equal(beam.geometry.drawRange.count,Infinity,'the actual additive beam must remain drawable');
+    setStrength(0);assert.equal(beam.visible,false);assert.equal(material.uniforms.strength.value,0);
+  }finally{beam.geometry.dispose();material.dispose();override.dispose();}
 });

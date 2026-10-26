@@ -19,11 +19,10 @@ const args = new Map(process.argv.slice(2).map(a => {
 const BASE = args.get('base') ?? 'http://127.0.0.1:5173';
 const ROUNDS = Number(args.get('rounds') ?? 2);
 const OUT = args.get('out') ?? 'outputs/memory-audit-v02';
-const CHROME = process.env.CHROME_PATH ?? 'C:/Program Files/Google/Chrome/Application/chrome.exe';
+const CHROME = process.env.CHROME_PATH ?? undefined;
 const CANDIDATES = [
   process.env.PLAYWRIGHT_MODULE,
   'playwright',
-  'C:/Users/ASUS/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.js',
 ].filter(Boolean);
 
 async function loadPlaywright() {

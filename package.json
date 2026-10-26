@@ -6,9 +6,10 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
     "build": "tsc -b && vite build",
-    "test": "node --experimental-strip-types --test tests/layout.test.ts tests/crescent.test.ts tests/gallery-state.test.ts tests/weather.test.ts",
+    "test": "node --experimental-strip-types --test tests/layout.test.ts tests/crescent.test.ts tests/coastal-forms.test.ts tests/coastal-assets.test.ts tests/harbor-assets.test.ts tests/gallery-state.test.ts tests/weather.test.ts",
     "preview": "vite preview --host 127.0.0.1 --port 4173",
     "verify": "node scripts/verify.mjs",
+    "verify:motion": "node scripts/verify-motion.mjs",
     "accept:crescent": "node scripts/crescent-acceptance.mjs"
   },
   "dependencies": {
@@ -26,5 +27,15 @@
     "@vitejs/plugin-react": "^5.0.4",
     "typescript": "~5.9.3",
     "vite": "^7.1.9"
+  },
+  "description": "Interactive keycap dioramas with real-time water and weather",
+  "license": "MIT",
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yang2-hue/Keyscape.git"
   }
 }

@@ -27,7 +27,7 @@ export function StudioEnvironment() {
     const previous = scene.environment;
     const previousIntensity = scene.environmentIntensity;
     scene.environment = target.texture;
-    scene.environmentIntensity = 0.35;
+    scene.environmentIntensity = 0.25;
     return () => { scene.environment = previous; scene.environmentIntensity = previousIntensity; target.dispose(); generator.dispose(); room.dispose(); };
   }, [gl, scene]);
   return null;

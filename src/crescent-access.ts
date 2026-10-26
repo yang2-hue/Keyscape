@@ -32,7 +32,9 @@ export function keepAccessClear(x:number,z:number,padding=0){
 export function gradeAccessTerrain(x:number,z:number,natural:number){
   const dx=x-ACCESS_CENTER.x,dz=z-ACCESS_CENTER.z,r=Math.hypot(dx,dz);
   let a=Math.atan2(dz,dx);if(a>1)a-=Math.PI*2;
-  const radial=THREE.MathUtils.smoothstep(r,.79,.89)*(1-THREE.MathUtils.smoothstep(r,1.22,1.38));
+  // Grade the walking strip, not the whole island into an equal-height wall.
+  // Cottage foundations and the lighthouse still get their own usable pads.
+  const radial=THREE.MathUtils.smoothstep(r,.72,.90)*(1-THREE.MathUtils.smoothstep(r,1.01,1.12));
   const angular=THREE.MathUtils.smoothstep(a,-3.65,-3.42)*(1-THREE.MathUtils.smoothstep(a,-.68,-.48));
   let h=THREE.MathUtils.lerp(natural,TERRACE,radial*angular);
   for(const c of COTTAGES){

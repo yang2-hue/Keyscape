@@ -1,143 +1,59 @@
-/* Keyscape's chrome is deliberately small: the key is the picture, this is the
-   wall it hangs on. Everything below references a token — no inline colour,
-   radius or duration — so the five moments and the night variant are a variable
-   swap rather than eight duplicated gradients. */
+/* Runway-inspired exhibition chrome. The artwork owns the visual detail. */
 :root{
   --sans:"Inter","Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
-  --paper:#e9e5dc;
-  --ink:#303e3a;
-  --ink-muted:#57655c;
-  --ink-faint:#7d897d;
-  --hairline:#7c887c2e;
-  --hairline-strong:#7c887c5c;
-  --veil:#e9e5dcd9;
-  /* One accent, reserved for interaction signals: focus rings and the tick that
-     says where the loop is. It is never used as decoration. */
-  --accent:#3f6b62;
-  --surface-hover:#ffffff5c;
-  --surface-press:#ffffff8c;
-  --radius-pill:999px;
-  --ease:cubic-bezier(.22,.61,.36,1);
-  --fast:140ms;
-  --slow:260ms;
-  --dwell:20000ms;
+  --paper:#f4f4f2;--ink:#141516;--ink-muted:#5c6065;--ink-faint:#73787d;
+  --hairline:#181a1c22;--hairline-strong:#181a1c44;--panel:#f4f4f2;
+  --veil:#f4f4f2ed;--accent:#25282b;--surface-hover:#1517190d;--surface-press:#15171918;
+  --radius:5px;--ease:cubic-bezier(.22,.61,.36,1);--fast:140ms;--slow:260ms;--dwell:20000ms;
+  font-family:var(--sans);color:var(--ink);background:var(--paper);font-synthesis:none;font-weight:400;-webkit-font-smoothing:antialiased;
 }
-:root{font-family:var(--sans);color:var(--ink);background:var(--paper);font-synthesis:none;font-weight:400;-webkit-font-smoothing:antialiased;font-optical-sizing:auto}
-*{box-sizing:border-box}
-body{margin:0}
-button,a{-webkit-tap-highlight-color:transparent}
-button{font:inherit;color:inherit;cursor:pointer;background:none;border:0}
-button:disabled{opacity:.45;cursor:not-allowed}
+*{box-sizing:border-box}body{margin:0}button,a{-webkit-tap-highlight-color:transparent}
+button{font:inherit;color:inherit;cursor:pointer;background:none;border:0}button:disabled{opacity:.4;cursor:default}
 :where(button,a):focus-visible{outline:2px solid var(--accent);outline-offset:3px}
-a{color:inherit;text-decoration:none}
-::selection{background:#3f6b6233}
-
-/* ---- stage shell ------------------------------------------------------ */
-.gallery{position:relative;isolation:isolate;height:100svh;min-height:680px;overflow:hidden;color:var(--ink);
-  background-color:var(--paper);
-  background-image:radial-gradient(ellipse at 50% 46%,transparent 52%,#00000012 100%);
-  transition:background-color .8s var(--ease),color .8s var(--ease)}
-/* The bright centre is its own layer so weather changes cross-fade instead of
-   snapping: gradients are not interpolable, opacity is. */
-.gallery::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
-  background:radial-gradient(ellipse at 53% 38%,#ffffff80 0%,transparent 60%);
-  opacity:.9;transition:opacity .8s var(--ease)}
-.gallery::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:.03;z-index:8;
-  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.88' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' opacity='.5' filter='url(%23n)'/%3E%3C/svg%3E")}
-
-.gallery.weather-rain{--paper:#b8c9c9;--ink-muted:#3f5253;--ink-faint:#5e7173;--hairline:#4e60602e;--hairline-strong:#4e60605c}
-.gallery.weather-mist{--paper:#e6e2d8}
-.gallery.night{--paper:#1c3243;--ink:#f0e8d5;--ink-muted:#cdc6b2;--ink-faint:#a8a494;--hairline:#d5dac433;--hairline-strong:#d5dac466;--veil:#1c3243d9;--accent:#a9c9bd;--surface-hover:#ffffff14;--surface-press:#ffffff21}
-.gallery.night::before{opacity:.14;background:radial-gradient(ellipse at 53% 38%,#b9d7e6 0%,transparent 62%)}
-.gallery.night{background-image:radial-gradient(ellipse at 50% 46%,transparent 45%,#00000040 100%)}
-.gallery.night.weather-rain{--paper:#16262f;--ink-muted:#c2c7c1;--ink-faint:#9ba39c}
-.gallery.night.weather-mist{--paper:#1a2b33;--ink-muted:#c5c8bf;--ink-faint:#9fa49b}
-
-.masthead{position:absolute;top:0;left:0;right:0;height:110px;display:flex;align-items:center;justify-content:space-between;padding:0 4.4%;z-index:3}
-.wordmark{font-size:33px;letter-spacing:-1.8px;font-weight:650}
-.wordmark span{display:inline-block;font-size:11px;vertical-align:top;margin-top:6px;margin-left:4px;letter-spacing:0}
-
-/* ---- artwork ---------------------------------------------------------- */
-.art-stage{position:absolute;inset:2% 7% 8%;touch-action:none;cursor:grab}
-.art-stage:active{cursor:grabbing}
-.art-stage canvas{display:block}
-
-/* ---- controls --------------------------------------------------------- */
-.gallery-footer{position:absolute;left:4.4%;right:4.4%;bottom:0;height:96px;
-  display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:24px;
-  border-top:1px solid var(--hairline)}
-.gesture-hint{font-size:11px;letter-spacing:.32px;color:var(--ink-muted);margin:0}
-.gesture-hint b{font-weight:400;margin:0 9px;opacity:.45}
-
-.moment{display:flex;align-items:center;gap:14px}
-.moment-label{font-size:11px;letter-spacing:1.1px;color:var(--ink-muted);white-space:nowrap}
-.moment-steps{display:flex;align-items:center;gap:7px;list-style:none;margin:0;padding:0}
-/* Upcoming, done, live. The live tick grows and fills over one dwell, so the
-   row doubles as a progress bar; four 12px ticks are enough to count. */
-.moment-steps li{position:relative;width:12px;height:3px;border-radius:2px;overflow:hidden;background:var(--hairline-strong);
-  transition:background var(--slow) var(--ease),width var(--slow) var(--ease)}
-.moment-steps li.done{background:var(--ink-faint)}
-.moment-steps li.now{width:26px;background:var(--hairline-strong)}
+a{color:inherit;text-decoration:none}::selection{background:#7d879640}
+.gallery{position:relative;isolation:isolate;height:100svh;min-height:360px;overflow:hidden;color:var(--ink);background:var(--paper);transition:background-color .8s var(--ease),color .8s var(--ease)}
+.gallery.weather-rain{--paper:#e5e9e9;--panel:#e5e9e9;--veil:#e5e9e9ed}
+.gallery.weather-mist{--paper:#efefec;--panel:#efefec;--veil:#efefeced}
+.gallery.night{--paper:#050607;--ink:#f4f5f6;--ink-muted:#a8adb4;--ink-faint:#9299a2;--hairline:#ffffff24;--hairline-strong:#ffffff44;--panel:#111315;--veil:#050607ed;--accent:#f4f5f6;--surface-hover:#ffffff12;--surface-press:#ffffff20}
+.masthead{position:absolute;top:32px;left:40px;right:40px;display:flex;align-items:center;justify-content:space-between;z-index:3;pointer-events:none}
+.wordmark{font-size:28px;letter-spacing:-1.5px;font-weight:550;line-height:1.15;pointer-events:auto}
+.edition{font-size:11px;letter-spacing:1.8px;color:var(--ink-muted)}
+.art-stage{position:absolute;inset:3% 4% 6%;touch-action:none;cursor:grab}
+.art-stage:active{cursor:grabbing}.art-stage canvas{display:block}
+.gallery-footer{position:absolute;left:40px;right:40px;bottom:max(24px,env(safe-area-inset-bottom));display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:24px;pointer-events:none;z-index:3}
+.study-label{font-size:11px;letter-spacing:1.5px;color:var(--ink-muted)}
+.gesture-hint{justify-self:end;font-size:11px;letter-spacing:.2px;color:var(--ink-muted);margin:0;white-space:nowrap}.gesture-hint b{font-weight:400;margin:0 5px;opacity:.6}
+.transport{display:flex;align-items:center;gap:20px;padding:8px 10px 8px 20px;border:1px solid var(--hairline);border-radius:var(--radius);background:var(--panel);pointer-events:auto}
+.moment{display:flex;flex-direction:column;gap:8px;min-width:100px}
+.moment-label{font-size:12px;letter-spacing:.3px;white-space:nowrap}
+.moment-steps{display:flex;align-items:center;gap:5px;list-style:none;margin:0;padding:0}
+.moment-steps li{position:relative;width:10px;height:2px;overflow:hidden;background:var(--hairline-strong);transition:background var(--slow) var(--ease),width var(--slow) var(--ease)}
+.moment-steps li.done{background:var(--ink-faint)}.moment-steps li.now{width:23px}
 .moment-fill{position:absolute;inset:0;background:var(--accent);transform:scaleX(1);transform-origin:left;animation:sweep var(--dwell) linear both}
+.gallery[data-motion="paused"] .moment-fill{animation-play-state:paused}
 @keyframes sweep{from{transform:scaleX(0)}to{transform:scaleX(1)}}
-
-.controls{display:flex;align-items:center;gap:10px;justify-self:end}
-.pill-button{display:inline-flex;align-items:center;gap:7px;min-height:40px;padding:0 16px;
-  border-radius:var(--radius-pill);border:1px solid var(--hairline-strong);
-  font-size:12px;font-weight:500;letter-spacing:.5px;color:var(--ink);
-  transition:background var(--fast) var(--ease),border-color var(--fast) var(--ease),transform var(--fast) var(--ease)}
-.pill-button:hover{background:var(--surface-hover);border-color:var(--ink-faint)}
-.pill-button[data-paused="true"]{background:var(--surface-press)}
-.icon-button{width:40px;height:40px;border-radius:50%;border:1px solid var(--hairline-strong);
-  display:grid;place-items:center;font-size:17px;line-height:1;color:var(--ink);
-  transition:background var(--fast) var(--ease),border-color var(--fast) var(--ease),transform var(--fast) var(--ease)}
-.icon-button:hover{background:var(--surface-hover);border-color:var(--ink-faint)}
-/* Press is the state worth designing: a 5% shrink, the same cue Apple uses
-   system-wide. Hover only shifts surface, never position. */
-.pill-button:active,.icon-button:active{transform:scale(.95)}
-.pill-button:disabled:active{transform:none}
-
-/* ---- states ----------------------------------------------------------- */
-.loading{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:13px;
-  background:var(--veil);backdrop-filter:blur(3px);pointer-events:none}
+.controls{display:flex;align-items:center;gap:4px;padding-left:12px;border-left:1px solid var(--hairline)}
+/* Class retained for the existing interaction harness; visually a square. */
+.pill-button,.icon-button{width:44px;height:44px;display:grid;place-items:center;padding:0;border-radius:var(--radius);transition:background var(--fast) var(--ease),transform var(--fast) var(--ease)}
+.pill-button:hover,.icon-button:hover{background:var(--surface-hover)}.pill-button[data-paused="true"]{background:var(--surface-press)}
+.pill-button:active,.icon-button:active{transform:scale(.95)}.pill-button:disabled:active{transform:none}
+.pill-button svg,.icon-button svg{width:18px;height:18px}.pill-button svg{fill:currentColor}.icon-button svg{fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.loading{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:13px;background:var(--veil);pointer-events:none}
 .loading-row{display:flex;align-items:baseline;gap:10px;font-size:12px;letter-spacing:1px;color:var(--ink-muted)}
-.loading-value{font-size:11px;letter-spacing:.6px;color:var(--ink-faint);font-variant-numeric:tabular-nums}
-.loading-track{width:168px;height:1px;background:var(--hairline-strong);overflow:hidden}
+.loading-value{font-size:11px;font-variant-numeric:tabular-nums}.loading-track{width:168px;height:1px;background:var(--hairline-strong);overflow:hidden}
 .loading-fill{display:block;height:100%;background:var(--ink);transform-origin:left;transition:transform .2s linear}
-
-.scene-fallback{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
-  padding:24px;text-align:center;background:var(--paper)}
-.scene-fallback p{font-size:17px;letter-spacing:.6px;margin:0}
-.scene-fallback span{font-size:12px;line-height:1.9;color:var(--ink-muted);max-width:280px}
-.scene-fallback button{margin-top:8px;padding:10px 2px;border-bottom:1px solid var(--hairline-strong);font-size:12px;letter-spacing:.6px}
-
-/* ---- preferences ------------------------------------------------------ */
-@media(prefers-reduced-transparency:reduce){
-  .loading{backdrop-filter:none;background:var(--paper)}
-}
-@media(prefers-contrast:more){
-  .gallery{--ink-muted:#26332e;--ink-faint:#3d4a43;--hairline:#4c5a5099;--hairline-strong:#39473fcc;--accent:#1f4740}
-  .gallery.night{--ink-muted:#f3ecda;--ink-faint:#ded6c1;--hairline:#e8ecdc66;--hairline-strong:#f0f4e699;--accent:#cfe7dc}
-}
+.scene-fallback{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;text-align:center;background:var(--paper)}
+.scene-fallback p{font-size:17px;margin:0}.scene-fallback span{font-size:12px;line-height:1.9;color:var(--ink-muted);max-width:280px}
+.scene-fallback button{margin-top:8px;padding:12px;border:1px solid var(--hairline-strong);border-radius:var(--radius);font-size:12px;min-height:44px}
+@media(prefers-contrast:more){.gallery{--ink-muted:#303236;--hairline:#181a1c80;--hairline-strong:#181a1c99}.gallery.night{--ink-muted:#e6e9ed;--hairline:#ffffff80;--hairline-strong:#ffffff99}}
+@media(prefers-reduced-transparency:reduce){.loading{background:var(--paper)}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
-
-/* ---- breakpoints ------------------------------------------------------ */
-@media(min-width:1700px){.art-stage{inset:1% 8% 6%}}
-@media(max-width:1050px){
-  .gesture-hint{display:none}
-  .gallery-footer{grid-template-columns:1fr auto}
-  .moment{justify-self:start}
-  .art-stage{inset:3% 5% 9%}
-}
+@media(max-width:1050px){.gesture-hint{display:none}.gallery-footer{grid-template-columns:1fr auto}}
 @media(max-width:650px){
-  .gallery{min-height:640px}
-  .masthead{height:76px;padding:0 6%}
-  .wordmark{font-size:27px}
-  .art-stage{inset:12% 0 24% 0}
-  .gallery-footer{left:6%;right:6%;height:auto;padding:14px 0 20px;grid-template-columns:1fr;justify-items:center;gap:14px}
-  .moment{justify-self:center;flex-direction:column;gap:9px}
-  .moment-label{font-size:11px}
-  .controls{justify-self:center;gap:12px}
-  .pill-button{min-height:44px;padding:0 18px}
-  .icon-button{width:44px;height:44px;font-size:18px}
+  .masthead{top:max(26px,env(safe-area-inset-top));left:24px;right:24px}.wordmark{font-size:26px}
+  .edition{font-size:11px;letter-spacing:1px;max-width:110px;text-align:right;line-height:1.6}
+  .art-stage{inset:10% 0 14%}
+  .gallery-footer{left:20px;right:20px;bottom:max(22px,env(safe-area-inset-bottom));display:flex;justify-content:center}
+  .study-label{position:fixed;top:88px;left:24px;font-size:11px}.transport{gap:14px;padding:7px 9px 7px 16px}
 }
+@media(max-height:500px) and (min-width:651px){.masthead{top:20px}.gallery-footer{bottom:12px}.art-stage{inset:0 14% 10%}.study-label{font-size:11px}}

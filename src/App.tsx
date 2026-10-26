@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { StudioEnvironment, useSoftwareRenderer } from './studio';
 import CrescentStudy from './CrescentStudy';
 import { nextView, type View } from './gallery-state';
-import { WEATHERS, weatherParams, type WeatherKind } from './weather-model';
+import { WEATHERS, weatherParams,KEY_LIGHT_POSITION, type WeatherKind } from './weather-model';
 
 /** Five moments, in order: morning clear, morning rain, evening clear, evening
  * fog, evening rain. The exhibition changes on its own — weather and time of
@@ -36,10 +36,10 @@ function useReducedMotion() {
   return reduced;
 }
 
-/** Holds each moment for `DWELL_MS`, then moves on. Timers stop while the tab is
- * hidden, so coming back never lands mid-transition with several changes queued
- * up. */
-function useAutoCycle() {
+/** Holds each moment for `DWELL_MS`, then moves on only while playing.
+ * Pause, reduced motion and hidden tabs cancel the timer. Resuming starts a
+ * fresh dwell for the current moment, synchronized with the tick's sweep. */
+function useAutoCycle(running: boolean) {
   const [step, setStep] = useState(0);
   const [revision, setRevision] = useState(0);
   // Bumped whenever the dwell timer is (re)armed, so the tick's sweep restarts
@@ -47,18 +47,25 @@ function useAutoCycle() {
   // hidden and reach the end of a moment that never started.
   const [run, setRun] = useState(0);
   const held = useRef(false);
+  const cancelCycle = useRef<() => void>(() => {});
   useEffect(() => {
     let timer = 0;
+    cancelCycle.current = () => window.clearTimeout(timer);
     const arm = () => {
       window.clearTimeout(timer);
       setRun(value => value + 1);
-      timer = window.setTimeout(() => setStep(value => (value + 1) % CYCLE.length), DWELL_MS);
+      timer = window.setTimeout(() => {
+        if (!held.current && !document.hidden && running) setStep(value => (value + 1) % CYCLE.length);
+      }, DWELL_MS);
     };
-    const onVisibility = () => { if (document.hidden) window.clearTimeout(timer); else arm(); };
-    if (!document.hidden && !held.current) arm();
+    const onVisibility = () => {
+      if (document.hidden || !running || held.current) window.clearTimeout(timer);
+      else arm();
+    };
+    if (!document.hidden && !held.current && running) arm();
     document.addEventListener('visibilitychange', onVisibility);
     return () => { window.clearTimeout(timer); document.removeEventListener('visibilitychange', onVisibility); };
-  }, [step, revision]);
+  }, [step, revision, running]);
   // Dev-only handle: the evidence harness has to reach a given moment without
   // waiting through the whole loop, and has to freeze the loop while it takes
   // screenshots. Never present in a production build.
@@ -69,6 +76,9 @@ function useAutoCycle() {
       set(index: number) {
         const next = ((index % CYCLE.length) + CYCLE.length) % CYCLE.length;
         held.current = true;
+        // Cancel synchronously: waiting for React's effect cleanup lets an
+        // already armed timer overtake this requested preset on slow renders.
+        cancelCycle.current();
         setStep(next);
         setRevision(value => value + 1);
         // Report the *requested* state: reading `step` here would still see the
@@ -76,11 +86,11 @@ function useAutoCycle() {
         return { step: next, ...CYCLE[next], dwell: DWELL_MS };
       },
       resume() { held.current = false; setRevision(value => value + 1); },
-      state() { return { step, ...CYCLE[step], dwell: DWELL_MS }; },
+      state() { return { step, ...CYCLE[step], dwell: DWELL_MS, running }; },
       states: CYCLE,
     };
     return () => { delete debug.__galleryCycle; };
-  }, [step]);
+  }, [step, running]);
   return { ...CYCLE[step], step, run };
 }
 
@@ -184,6 +194,9 @@ function Atmosphere({ night, weather }: { night: boolean; weather: WeatherKind }
   const scene=useThree(state=>state.scene);
   const gl = useThree(state=>state.gl);
   const software = useSoftwareRenderer();
+  // JSX initializes the rig once. Feeding changing targets back through props
+  // would snap the lights before the per-frame damping could interpolate.
+  const initial=useRef(weatherParams(weather,night)).current;
   const ambient = useRef<THREE.AmbientLight>(null);
   const sun = useRef<THREE.DirectionalLight>(null);
   const fill = useRef<THREE.DirectionalLight>(null);
@@ -205,8 +218,15 @@ function Atmosphere({ night, weather }: { night: boolean; weather: WeatherKind }
       color.set(p.sunColor);
       sun.current.color.lerp(color, 1 - Math.exp(-3 * delta));
     }
-    if (hemi.current) hemi.current.intensity = THREE.MathUtils.damp(hemi.current.intensity, night ? .16 : .45, 3, delta);
-    if (fill.current) fill.current.intensity = THREE.MathUtils.damp(fill.current.intensity, p.fill, 3, delta);
+    if (hemi.current) {
+      hemi.current.intensity=THREE.MathUtils.damp(hemi.current.intensity,p.hemisphere,3,delta);
+      color.set(p.skyColor);hemi.current.color.lerp(color,1-Math.exp(-3*delta));
+      color.set(p.groundColor);hemi.current.groundColor.lerp(color,1-Math.exp(-3*delta));
+    }
+    if (fill.current) {
+      fill.current.intensity=THREE.MathUtils.damp(fill.current.intensity,p.fill,3,delta);
+      color.set(p.fillColor);fill.current.color.lerp(color,1-Math.exp(-3*delta));
+    }
     if (fog.current) {
       // `fog` stays attached at density 0 for a clear sky instead of being
       // nulled out, which would recompile every material on each change.
@@ -220,15 +240,18 @@ function Atmosphere({ night, weather }: { night: boolean; weather: WeatherKind }
       d.night = String(night);
       d.fogDensity = String(fog.current?.density ?? 0);
       d.sunIntensity = String(sun.current?.intensity ?? 0);
+      d.ambientIntensity=String(ambient.current?.intensity??0);
+      d.hemisphereIntensity=String(hemi.current?.intensity??0);
+      d.fillIntensity=String(fill.current?.intensity??0);
+      d.environmentIntensity=String(scene.environmentIntensity);
     }
   });
-  const p = weatherParams(weather, night);
   return <>
     <fogExp2 ref={fog} attach="fog" args={FOG_INIT} />
-    <ambientLight ref={ambient} intensity={p.ambient} color={p.ambientColor} />
-    <hemisphereLight ref={hemi} intensity={night?.16:.45} color="#fff5e1" groundColor="#b6c9bc" />
-    <directionalLight ref={sun} position={[-3, 7, 4]} intensity={p.sun} color={p.sunColor} castShadow shadow-mapSize={software ? [1024, 1024] : [4096, 4096]} shadow-camera-left={-3} shadow-camera-right={3} shadow-camera-top={3} shadow-camera-bottom={-3} shadow-normalBias={0.012} shadow-bias={-0.0002} shadow-radius={3} />
-    <directionalLight ref={fill} position={[4, 3, -4]} intensity={p.fill} color="#a5d6e3" />
+    <ambientLight name="GalleryAmbient" ref={ambient} intensity={initial.ambient} color={initial.ambientColor} />
+    <hemisphereLight name="GallerySky" ref={hemi} intensity={initial.hemisphere} color={initial.skyColor} groundColor={initial.groundColor} />
+    <directionalLight name="GalleryKey" ref={sun} position={KEY_LIGHT_POSITION} intensity={initial.sun} color={initial.sunColor} castShadow shadow-mapSize={software ? [1024, 1024] : [4096, 4096]} shadow-camera-left={-3} shadow-camera-right={3} shadow-camera-top={3} shadow-camera-bottom={-3} shadow-camera-near={.5} shadow-camera-far={18} shadow-normalBias={.003} shadow-bias={-.00008} shadow-radius={3} />
+    <directionalLight name="GalleryRim" ref={fill} position={[4, 3, -4]} intensity={initial.fill} color={initial.fillColor} />
   </>;
 }
 
@@ -293,20 +316,21 @@ function GalleryScene({ playing, night, weather, view, reduced, onReady }: { pla
 
 export default function App() {
   const [playing, setPlaying] = useState(true);
-  const { weather, night, step, run } = useAutoCycle();
+  const reduced = useReducedMotion();
+  const running = playing && !reduced;
+  const { weather, night, step, run } = useAutoCycle(running);
   const [ready, setReady] = useState(false);
   const [view, setView] = useState<View>({ kind: 'home', serial: 0 });
-  const reduced = useReducedMotion();
   const assetProgress = useProgress();
 
   const weatherLabel = WEATHERS.find(item => item.id === weather)?.title ?? '晴天';
   const progress = Math.round(assetProgress.progress);
 
-  return <main className={`gallery ${night ? 'night' : ''} weather-${weather}`} style={{ '--dwell': `${DWELL_MS}ms` } as CSSProperties}>
-    <header className="masthead"><a className="wordmark" href="/" aria-label="Keyscape 首页">keyscape<span>✳</span></a></header>
+  return <main className={`gallery ${night ? 'night' : ''} weather-${weather}`} data-motion={running ? 'running' : 'paused'} style={{ '--dwell': `${DWELL_MS}ms` } as CSSProperties}>
+    <header className="masthead"><a className="wordmark" href={import.meta.env.BASE_URL} aria-label="Keyscape 首页">keyscape</a><span className="edition">INTERACTIVE STUDIES / 001</span></header>
 
     <section className="art-stage" aria-label="可旋转的三维艺术键">
-      <SceneBoundary><GalleryScene playing={playing && !reduced} night={night} weather={weather} view={view} reduced={reduced} onReady={() => setReady(true)} /></SceneBoundary>
+      <SceneBoundary><GalleryScene playing={running} night={night} weather={weather} view={view} reduced={reduced} onReady={() => setReady(true)} /></SceneBoundary>
       {(!ready || assetProgress.active) && <div className="loading" role="status">
         <span className="loading-row"><span>正在布置展厅</span><span className="loading-value">{progress}%</span></span>
         <span className="loading-track"><span className="loading-fill" style={{ transform: `scaleX(${progress / 100})` }} /></span>
@@ -314,7 +338,8 @@ export default function App() {
     </section>
 
     <footer className="gallery-footer">
-      <p className="gesture-hint">拖动旋转 <b>·</b> 滚轮拉近 <b>·</b> 点击灯塔、小船、水面</p>
+      <span className="study-label">C / COASTAL STUDY</span>
+      <div className="transport" role="group" aria-label="作品控制">
 
       {/* The exhibition runs on its own, so the frame has to say where in the
           loop it is. Five ticks, one filled: the label reads, the ticks count. */}
@@ -328,9 +353,13 @@ export default function App() {
       </div>
 
       <div className="controls">
-        <button className="pill-button" data-paused={!playing || reduced} disabled={reduced} onClick={() => setPlaying(!playing)}>{reduced ? '静态模式' : playing ? 'Ⅱ 暂停动态' : '▷ 继续动态'}</button>
-        <button className="icon-button" aria-label="恢复初始视角" title="恢复初始视角" onClick={() => setView(v => nextView(v, 'home'))}>↺</button>
+        <button className="pill-button" aria-label={reduced ? '静态模式' : playing ? '暂停动态' : '继续动态'} title={reduced ? '静态模式' : playing ? '暂停动态' : '继续动态'} data-paused={!playing || reduced} disabled={reduced} onClick={() => setPlaying(!playing)}>
+          <svg viewBox="0 0 24 24" aria-hidden="true">{!playing || reduced ? <path d="M8 5v14l11-7z" /> : <path d="M7 5h3v14H7zm7 0h3v14h-3z" />}</svg>
+        </button>
+        <button className="icon-button" aria-label="恢复初始视角" title="恢复初始视角" onClick={() => setView(v => nextView(v, 'home'))}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9a7 7 0 1 1-.1 6M5 4v5h5" /></svg></button>
       </div>
+      </div>
+      <p className="gesture-hint">拖动旋转 <b>·</b> 点击探索</p>
     </footer>
   </main>;
 }

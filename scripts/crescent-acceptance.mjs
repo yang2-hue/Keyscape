@@ -31,17 +31,16 @@ const OUT = args.get('out') ?? 'outputs/crescent-acceptance-v11';
 // a long window and re-timed to CLIP_SECONDS to match real-time appearance.
 const RECORD_MS = Number(args.get('record-ms') ?? 120000);
 const CLIP_SECONDS = Number(args.get('clip-seconds') ?? 12);
-const CHROME = process.env.CHROME_PATH ?? 'C:/Program Files/Google/Chrome/Application/chrome.exe';
+const CHROME = process.env.CHROME_PATH ?? undefined;
 const PLAYWRIGHT_CANDIDATES = [
   process.env.PLAYWRIGHT_MODULE,
   'playwright',
-  'C:/Users/ASUS/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.js',
 ].filter(Boolean);
 
 /** Playwright's bundled ffmpeg ships libvpx-vp9 only (no vp8), which is why
  * its own recordVideo path fails silently here. Reuse whatever it installed. */
 function findFfmpeg() {
-  const root = path.join(process.env.LOCALAPPDATA ?? 'C:/Users/ASUS/AppData/Local', 'ms-playwright');
+  const root = path.join(process.env.LOCALAPPDATA ?? process.cwd(), 'ms-playwright');
   const bundled = fs.existsSync(root)
     ? fs.readdirSync(root).filter(n => /^ffmpeg-\d+$/.test(n)).sort().reverse()
         .flatMap(n => ['ffmpeg-win64.exe', 'ffmpeg.exe', 'ffmpeg-linux', 'ffmpeg-mac'].map(f => path.join(root, n, f)))

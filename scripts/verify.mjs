@@ -1,11 +1,10 @@
 /**
  * Gallery verification harness (versioned, reproducible).
  *
- *   node scripts/verify.mjs [--base=http://127.0.0.1:5173] [--out=outputs/gallery-verify-v11]
+ *   node scripts/verify.mjs [--base=http://127.0.0.1:5173] [--out=outputs/gallery-verify-v17]
  *
  * Requires a running dev server (`pnpm dev`). Playwright is resolved from the
- * project first, then from PLAYWRIGHT_MODULE, then from the local Codex runtime
- * cache used by earlier one-off scripts. Chrome defaults to the system install;
+ * project first, then from PLAYWRIGHT_MODULE, then from PLAYWRIGHT_MODULE. Chrome defaults to Playwright Chromium;
  * override with CHROME_PATH.
  *
  * The exhibition cycles on its own and exposes no controls, so the harness uses
@@ -22,12 +21,11 @@ const args = new Map(process.argv.slice(2).map(a => {
   return [k, rest.join('=') || 'true'];
 }));
 const BASE = args.get('base') ?? 'http://127.0.0.1:5173';
-const OUT = args.get('out') ?? 'outputs/gallery-verify-v11';
-const CHROME = process.env.CHROME_PATH ?? 'C:/Program Files/Google/Chrome/Application/chrome.exe';
+const OUT = args.get('out') ?? 'outputs/gallery-verify-v17';
+const CHROME = process.env.CHROME_PATH ?? undefined;
 const PLAYWRIGHT_CANDIDATES = [
   process.env.PLAYWRIGHT_MODULE,
   'playwright',
-  'C:/Users/ASUS/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.js',
 ].filter(Boolean);
 
 async function loadPlaywright() {
@@ -52,6 +50,13 @@ function check(name, pass, detail) {
 
 const dataset = page => page.locator('canvas').evaluate(c => ({ ...c.dataset }));
 const num = (d, key) => Number(d[key] ?? NaN);
+// Inspect the material that is actually attached to the visible water mesh,
+// not just the simulation counters or an unused uniform object.
+const renderedWater = page => page.evaluate(() => {
+  const d=window.__harborDebug;
+  const u=d.water.current.getObjectByName('CoastalWaterSurface').material.uniforms;
+  return {time:u.time.value,simulation:d.dynamics.time,wavesBound:u.waves.value===d.dynamics.texture,dusk:u.dusk.value};
+});
 
 /** Wait for a numeric dataset value to satisfy a JS expression over `v`. */
 async function waitFor(page, key, predicate, timeout = 180000) {
@@ -89,7 +94,11 @@ async function framesAdvance(page, min, timeout = 30000) {
 
 /** Wait until the render loop has gone quiet, so a straggler frame cannot be
  * counted as activity. */
-async function settle(page, quiet = 2600, timeout = 30000) {
+async function settle(page, quiet = 2600, timeout = 120000) {
+  // A software-rendered frame can itself exceed the old 2.6s quiet window.
+  // Do not mistake a pending slow frame for an idle demand loop.
+  const observed=await page.locator('canvas').evaluate(c=>Number(c.dataset.advanceDt)||0);
+  quiet=Math.max(quiet,Math.min(20000,observed*2000+1000));
   const start = Date.now();
   let last = -1, since = Date.now();
   while (Date.now() - start < timeout) {
@@ -105,7 +114,11 @@ async function settle(page, quiet = 2600, timeout = 30000) {
  * only updates on a rendered frame, so wait for the preset to be picked up. */
 async function preset(page, index) {
   const state = await page.evaluate(i => window.__galleryCycle.set(i), index);
-  await page.waitForFunction(weather => document.querySelector('canvas')?.dataset.weather === weather, state.weather, { timeout: 60000 }).catch(() => {});
+  await page.waitForFunction(state => {
+    const canvas=document.querySelector('canvas');
+    return canvas?.dataset.weather === state.weather && canvas?.dataset.night === String(state.night)
+      && document.querySelector('main.gallery')?.classList.contains(`weather-${state.weather}`);
+  }, state, { timeout: 60000 });
   return state;
 }
 
@@ -153,7 +166,7 @@ try {
       fillAnimating: getComputedStyle(document.querySelector('.moment-fill')).animationName,
     };
   });
-  check('controls use the pill and 40px icon shapes', chromeState.pillRadius.startsWith('999') && chromeState.pillHeight >= 40 && chromeState.iconSize >= 40, chromeState);
+  check('controls use small corners and 44px tap targets', chromeState.pillRadius === '5px' && chromeState.pillHeight >= 44 && chromeState.iconSize >= 44, chromeState);
   check('the loop shows five ticks with exactly one live', chromeState.steps === 5 && chromeState.liveTicks === 1, chromeState);
   check('the live tick sweeps over one dwell', chromeState.fillAnimating === 'sweep', chromeState.fillAnimating);
   check('the pause toggle exposes its state without double-speaking', chromeState.paused === 'false', chromeState.paused);
@@ -190,6 +203,8 @@ try {
   // 2. Morning: the lighthouse is architecture, not a lamp.
   const darkByDay = await waitFor(page, 'lanternEmissive', 'v < 0.03', 90000);
   const day = await dataset(page);
+  const waterDay = await renderedWater(page);
+  check('rendered water uses the live wave texture and simulation time',waterDay.wavesBound&&waterDay.time>0&&Math.abs(waterDay.time-waterDay.simulation)<1e-6,waterDay);
   check('morning leaves the lamp room unlit', darkByDay && num(day, 'beaconStrength') < 0.02 && num(day, 'searchLightIntensity') < 0.05, {
     lanternEmissive: num(day, 'lanternEmissive'), beaconStrength: num(day, 'beaconStrength'), searchLight: num(day, 'searchLightIntensity'),
   });
@@ -302,6 +317,8 @@ try {
   const night = await dataset(page);
   check('evening lights the beacon', beaconLit && num(night, 'searchLightIntensity') > 2, { lanternEmissive: num(night, 'lanternEmissive'), searchLight: num(night, 'searchLightIntensity') });
   check('evening turns the sweep beam on', await waitFor(page, 'beaconStrength', 'v > 0.9', 180000), { beaconStrength: num(await dataset(page), 'beaconStrength') });
+  const waterNight=await renderedWater(page);
+  check('rendered water receives the night transition',waterNight.dusk>.8,waterNight);
   await page.screenshot({ path: path.join(OUT, 'crescent-night.png') });
 
   await preset(page, 0);
@@ -323,9 +340,17 @@ try {
   const frozen = await dataset(page);
   await page.waitForTimeout(700);
   check('paused freezes animation time', frozen.boatTime === (await dataset(page)).boatTime, frozen.boatTime);
+  check('wave readback error count is numeric and zero', Number.isFinite(num(frozen, 'waveErrors')) && num(frozen, 'waveErrors') === 0, frozen.waveErrors);
+
+  await page.getByRole('button', { name: '恢复初始视角' }).click();
+  await framesAdvance(page, 3, 60000);
+  check('resetting the camera while paused keeps the beam frozen', frozen.beaconAngle === (await dataset(page)).beaconAngle, { before: frozen.beaconAngle, after: (await dataset(page)).beaconAngle });
+  const pausedWater=await renderedWater(page);
+  check('camera redraw does not advance paused water',Math.abs(pausedWater.time-num(frozen,'boatTime'))<1e-6&&pausedWater.wavesBound,pausedWater);
 
   await preset(page, 3);
   check('paused transitions still complete', await waitFor(page, 'fogDensity', 'v > 0.06', 180000), { fog: num(await dataset(page), 'fogDensity') });
+  check('a weather transition while paused keeps the beam frozen', frozen.beaconAngle === (await dataset(page)).beaconAngle, (await dataset(page)).beaconAngle);
 
   await preset(page, 0);
   await page.getByRole('button', { name: /继续动态/ }).click();

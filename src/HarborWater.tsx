@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { HARBOR,roundedSquarePoint, type Heightfield } from './harbor-layout';
 import type {WaterDynamics} from './water-dynamics';
 import type {ThreeEvent} from '@react-three/fiber';
+import {KEY_LIGHT_POSITION} from './weather-model';
 
 const UP=new THREE.Vector3(0,1,0);
 /** Stable identities: passing a fresh array literal would invalidate the
@@ -40,7 +41,7 @@ const fragment=`
   uniform sampler2D sceneColor;uniform sampler2D sceneDepth;
   uniform sampler2D waves;uniform sampler2D bedHeights;
   uniform mat4 inverseProjection;uniform mat4 inverseWater;uniform mat4 waterMatrix;
-  uniform vec2 resolution;uniform float time;uniform float rain;uniform float dusk;
+  uniform vec2 resolution;uniform float time;uniform float rain;uniform float dusk;uniform vec3 sunPosition;
   uniform float level;uniform float deepTint;
   uniform float swellAmp;uniform vec2 swellDir;
   uniform float orthographic;uniform vec3 cameraRay;
@@ -58,7 +59,10 @@ const fragment=`
     float dz=wave.a+swellDir.y*swellAmp*2.6*cos(swellPhase)+.009*cos(p.y*59.0-p.x*43.0+time*.7);
     vec3 localN=normalize(waterNormal+vec3(-dx,0.0,-dz)*top*(1.0+rain*.45));
     vec3 N=normalize(mat3(waterMatrix)*localN),V=orthographic>.5?-cameraRay:normalize(cameraPosition-worldPoint);
-    vec2 offset=vec2(dx,dz)*.014*top;
+    // Project the disturbance into the camera plane; local XZ is rotated with
+    // the island and must not be used as screen-space UV displacement.
+    vec3 rippleView=mat3(viewMatrix)*mat3(waterMatrix)*vec3(-dx,0.0,-dz);
+    vec2 offset=rippleView.xy*.010*top;
     vec2 refractedUV=clamp(uv+offset,vec2(.001),vec2(.999));
     float sampleDepth=texture2D(sceneDepth,refractedUV).r;
     vec3 behind=viewAt(refractedUV,sampleDepth);
@@ -70,25 +74,30 @@ const fragment=`
     float exitDistance=max(.005,min(axisDistance.x,min(axisDistance.y,axisDistance.z)));
     float opticalDepth=sampleDepth>.9999?exitDistance:min(length(behind-viewPoint),exitDistance);
     opticalDepth=clamp(opticalDepth,.015,1.8);
-    vec3 absorption=exp(-vec3(2.7,.62,.30)*opticalDepth);
-    vec3 scatter=mix(vec3(.025,.32,.39),vec3(.012,.15,.22),dusk*.65+rain*.12);
-    vec3 transmitted=source*absorption+scatter*(vec3(1)-absorption)*.7;
+    vec3 absorption=exp(-vec3(3.2,.88,.45)*opticalDepth);
+    vec3 scatter=mix(vec3(.014,.23,.30),vec3(.004,.035,.063),dusk);
+    vec3 transmitted=source*absorption+scatter*(vec3(1)-absorption)*.48;
     float seaDepth=level-texture2D(bedHeights,(p+1.6)/3.2).r;
-    transmitted=mix(transmitted,vec3(.018,.19,.27),deepTint*smoothstep(.32,.67,seaDepth)*.48);
+    vec3 deepWater=mix(vec3(.008,.16,.23),vec3(.003,.035,.062),dusk);
+    transmitted=mix(transmitted,deepWater,deepTint*smoothstep(.26,.70,seaDepth)*.22);
     float cosV=max(dot(N,V),0.0);
-    float fresnel=.02+.30*pow(1.0-cosV,5.0);
-    vec3 sky=mix(mix(vec3(.50,.71,.76),vec3(.25,.44,.53),deepTint),vec3(.13,.23,.31),dusk*.8+rain*.2);
+    float fresnel=.02+.26*pow(1.0-cosV,5.0);
+    vec3 reflected=reflect(-V,N);
+    vec3 sky=mix(vec3(.62,.72,.71),vec3(.18,.34,.47),smoothstep(-.15,.8,reflected.y));
+    sky=mix(sky,vec3(.018,.04,.07),dusk)*(1.0-rain*.25);
     vec3 color=mix(transmitted,sky,fresnel);
-    vec3 L=normalize(vec3(-3.0,7.0,4.0)-worldPoint);
-    float sun=pow(max(dot(N,normalize(L+V)),0.0),260.0);
-    color+=vec3(1.0,.96,.85)*sun*.6*(1.0-rain*.8);
+    vec3 L=normalize(sunPosition-worldPoint);
+    float sun=pow(max(dot(N,normalize(L+V)),0.0),170.0);
+    color+=vec3(1.0,.96,.85)*sun*.45*(1.0-rain*.8)*(1.0-dusk*.94);
     float fine=pow(max(0.0,sin(p.x*63.0+p.y*14.0+time*.8)*cos(p.y*47.0-time*.5)),16.0);
-    color+=vec3(.05,.075,.08)*fine*top*(1.0-deepTint*.85);
+    color+=vec3(.025,.035,.04)*fine*top*.2*(1.0-dusk*.9);
     float depth=level+waveHeight-texture2D(bedHeights,(p+1.6)/3.2).r;
-    float shore=smoothstep(.0,.015,depth)*(1.0-smoothstep(.03,.10,depth));
-    float broken=.5+.5*sin(p.x*107.0+sin(p.y*83.0)*2.0-time*.8);
+    float shore=smoothstep(-.01,.008,depth)*(1.0-smoothstep(.015,.065,depth));
+    float broken=smoothstep(.18,.85,.5+.5*sin(p.x*61.0+p.y*43.0+sin(p.y*37.0)*1.8-time*.9)*cos(p.y*31.0-p.x*17.0));
+    float swash=.55+.45*sin(time*1.4+depth*50.0+p.x*4.0);
     float crest=smoothstep(.022,.060,waveHeight)*smoothstep(.12,.45,length(wave.ba));
-    color=mix(color,vec3(.89,.96,.89),top*clamp(shore*broken*.55+crest*.16,0.0,.65));
+    vec3 foam=mix(vec3(.72,.83,.79),vec3(.10,.17,.19),dusk);
+    color=mix(color,foam,top*clamp(shore*broken*swash*.44+crest*.09,0.0,.5));
     gl_FragColor=vec4(color,1.0);
     #include <fog_fragment>
     #include <tonemapping_fragment>
@@ -149,7 +158,12 @@ export default function HarborWater({ field, footprint, playing, evening, rainy,
     // `fog` on a ShaderMaterial makes the renderer write these two uniforms
     // from scene.fog every frame; they must exist here or refreshFogUniforms
     // throws on the first draw.
-    fogColor:{value:new THREE.Color('#e9e5dc')},fogDensity:{value:0}}),[capture,textures,dynamics,deepTint,swellAmp,swellDir]);
+    fogColor:{value:new THREE.Color('#e9e5dc')},fogDensity:{value:0},sunPosition:{value:new THREE.Vector3(...KEY_LIGHT_POSITION)}}),[capture,textures,dynamics,deepTint,swellAmp,swellDir]);
+  // Own the material and its live uniforms together. Passing the mutable
+  // uniform object through a JSX child left the rendered material holding an
+  // initial copy: simulation advanced while its time, waves and dusk froze.
+  const waterMaterial=useMemo(()=>new THREE.ShaderMaterial({uniforms,vertexShader:vertex,fragmentShader:fragment,side:THREE.FrontSide,fog:true}),[uniforms]);
+  useEffect(()=>()=>waterMaterial.dispose(),[waterMaterial]);
   const background=useMemo(()=>new THREE.Color('#e9e5dc'),[]);
   useEffect(()=>{
     if(!import.meta.env.DEV)return;
@@ -169,6 +183,11 @@ export default function HarborWater({ field, footprint, playing, evening, rainy,
     if(dynamics){uniforms.waves.value=dynamics.texture;uniforms.time.value=dynamics.time;}else if(playing)uniforms.time.value+=delta;
     uniforms.rain.value=THREE.MathUtils.damp(uniforms.rain.value,rainy?1:0,3,delta);
     uniforms.dusk.value=THREE.MathUtils.damp(uniforms.dusk.value,evening?1:0,3,delta);
+    if(import.meta.env.DEV){
+      gl.domElement.dataset.waterShaderTime=String(waterMaterial.uniforms.time.value);
+      gl.domElement.dataset.waterDusk=String(waterMaterial.uniforms.dusk.value);
+      gl.domElement.dataset.waterWaveBound=String(!dynamics||waterMaterial.uniforms.waves.value===dynamics.texture);
+    }
     uniforms.inverseProjection.value.copy(camera.projectionMatrixInverse);
     uniforms.orthographic.value=camera instanceof THREE.OrthographicCamera?1:0;
     camera.getWorldDirection(uniforms.cameraRay.value);
@@ -220,9 +239,7 @@ export default function HarborWater({ field, footprint, playing, evening, rainy,
     <mesh geometry={resources.foot} material={resources.footMaterial} castShadow receiveShadow />
     <mesh geometry={resources.floor} material={resources.floorMaterial} receiveShadow />
     <group ref={water}>
-      <mesh geometry={resources.volume} name="CoastalWaterSurface" renderOrder={2} onClick={splash}>
-        <shaderMaterial uniforms={uniforms} vertexShader={vertex} fragmentShader={fragment} side={THREE.FrontSide} fog />
-      </mesh>
+      <mesh geometry={resources.volume} material={waterMaterial} name="CoastalWaterSurface" renderOrder={2} onClick={splash}/>
     </group>
   </group>;
 }

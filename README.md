@@ -1,80 +1,65 @@
 # Keyscape
 
-把一颗键，变成一个值得停留的世界。
+**把一颗键，变成一个值得停留的世界。**
 
-单键数字艺术展的本地交互原型。**当前只有一件作品：`月湾环抱`**——一颗月牙形的岛，把浅浅的泻湖抱在怀里。场景全部由代码程序化生成，默认不加载任何外部模型或贴图。
+An interactive keycap diorama built with React Three Fiber. 当前版本是一颗海岸主题艺术键：月牙形海湾、微缩村落和灯塔，以及实时变化的水面、天气与光照。
 
-展厅会**自己变化**：五个时刻——早上晴、早上雨、晚上晴、晚雾、晚上雨——每 20 秒一步，没有天气或昼夜开关。你只能看着它变，或者点它。
+![海岸作品实机截图](docs/media/coastal-day.png)
 
-此前的 `潮汐之间`、`云门拱语`、`蓝洞来信` 三件作品已连同源码、参考图、测试与检查脚本一并移除。先读根目录 `agent.md`。
+## 体验
 
-**当前状态：构建、测试与浏览器验证全绿。**
+- 拖动旋转，滚轮或双指缩放；底部按钮暂停动态、恢复视角。
+- 晴天、雨天、晴夜、雾夜、雨夜自动轮换，每段 20 秒。
+- 点击水面激起波纹并惊动鱼群；点击渔船漂流，再次点击返航。
+- 点击灯塔触发闪光与扫光；夜间灯塔与房屋窗户亮起。
+- 尊重系统「减少动态」偏好，暂停后采用按需渲染。
 
-## 启动
+这是单件作品的交互原型，尚未实现整套键盘或多作品展厅。
 
-需要 Node.js 22.12+、pnpm；在 Windows / Node 22–24 / pnpm 11 上验证。
+## 本地运行
+
+需要 **Node.js 24 LTS** 和 **pnpm 11.25.0**。
 
 ```sh
-pnpm install
-pnpm dev              # http://127.0.0.1:5173/
-pnpm build            # tsc -b + vite build
-pnpm test             # 19 项单元测试（node --experimental-strip-types --test）
-pnpm verify           # 36 项浏览器检查（需先跑 pnpm dev），产出 outputs/gallery-verify-v11/
-pnpm accept:crescent  # 月湾逐项验收：6 张视角截图 + 扫光录屏 + check.json（约 5 分钟）
+pnpm install --frozen-lockfile
+pnpm dev       # http://127.0.0.1:5173/
+pnpm test
+pnpm build
+pnpm preview   # http://127.0.0.1:4173/
 ```
 
-## 已有体验
+六件 GLB 和贴图随项目提供，运行不需要素材平台账号或 API 密钥。
 
-**看得见的变化**
+## 技术与结构
 
-- 五个时刻自动循环：早上晴 → 早上雨 → 晚上晴 → 晚雾 → 晚上雨 → 回到早上晴；每步 20 秒，切换是阻尼过渡而不是硬切。
-- 白天灯塔完全不发光：灯室是深色玻璃，光锥、聚光灯、点光源全部关闭；只有夜航或你点它的时候才亮。
-- 指数雾：雾天里远侧的礁石与海面一起溶进背景，水面着色器同样接入了场景雾。
+React 19、TypeScript、Vite、Three.js、React Three Fiber、Drei 与后处理。程序地形与 Blender 资产组成场景；GPU 波场驱动水面，独立状态驱动船鱼、天气及灯塔。
 
-**可以点的地方**
+| 位置 | 用途 |
+| --- | --- |
+| `src/App.tsx`、`src/style.css` | 展厅、相机、自动时刻切换 |
+| `src/CrescentStudy.tsx`、`src/crescent-bay.ts` | 资产装配、地形与交互 |
+| `src/HarborWater.tsx`、`src/water-dynamics.ts` | 实时水面与波场 |
+| `src/beacon-light.ts`、`src/weather*` | 灯塔和天气 |
+| `public/models/` | 六件 GLB 及来源说明 |
+| `scripts/blender/` | 建模与资产处理脚本 |
+| `tests/` | 动线、几何、资产边界及状态测试 |
 
-- **灯塔**：白天点一下，灯室闪三下、光锥出现并加速扫一圈；夜里点则加快扫光。
-- **小船**：点一下开始漂流（绕泻湖一圈 26 秒，一直漂）；再点一下它自己回到泊位停好——点两次就复位。
-- **水面**：点一下，抬升一道波，同时惊散附近的鱼；波场由 GPU 有限差分推进，船的姿态从同一波场采样。
-- 鼠标移到可点物体上会变成手型。
+## 免费部署
 
-**其他**
+项目没有后端，适合 GitHub Pages 或 Cloudflare Pages，见 [部署说明](docs/deployment.md)。工作流会在推送 `main` 后测试、构建和发布；首次使用需启用仓库的 Pages，来源选 GitHub Actions。
 
-- 拖动／触摸旋转，滚轮或双指缩放，拉近与恢复视角，统一用正交相机。
-- 暂停或系统开启「减少动态」时切到 `frameloop="demand"`：不空转渲染；暂停期间换天气仍会把过渡走完（按帧计数）。
+GitHub Pages 构建路径为 `/Keyscape/`；根域名部署保留 `VITE_BASE_PATH=/`。模型和首页链接均跟随构建路径。
 
-## 界面规范
+## 验证与限制
 
-展厅外壳（页标、控制条、状态层）的设计令牌与规则写在 `docs/design-system.md`：一个强调色只做交互信号、按压缩 5%、悬停不位移、11px 是文字下限、一个控制簇。改样式前先读那一页。
+发布前执行构建和 27 项单元测试。浏览器专项曾验证加载、船鱼运动、暂停、地形封闭和光束残影修复；最终版本尚未重跑完整浏览器回归或验收真实设备性能。软件渲染截图不能证明真机流畅度，构建仍有较大 3D 依赖体积提示。
 
-## 结构
+浏览器工具为可选依赖：安装 Playwright（`pnpm add -D playwright`）并运行 `pnpm exec playwright install chromium`。先启动开发服务，再运行 `pnpm verify`、`pnpm verify:motion`。可用 `PLAYWRIGHT_MODULE` 指向已有安装，`CHROME_PATH` 指定 Chrome。验收录屏脚本另需 FFmpeg。结果输出到未提交的 `outputs/`。
 
-```text
-src/App.tsx              展厅、自动循环、相机、光照与天气、雾、后期、导入
-src/gallery-state.ts     视角状态（纯函数，可单测）
-src/CrescentStudy.tsx    月湾装配、鱼群漫游、灯塔与船、三个交互点
-src/crescent-bay.ts      月湾地形、小屋、码头、灯塔、植被、船与鱼
-src/crescent-access.ts   主路／支路／岸阶的布局与地形整平（纯函数）
-src/HarborWater.tsx      共享场景捕获、水体着色器（接入场景雾）、树脂底座
-src/water-dynamics.ts    GPU 有限差分波场与泊船采样
-src/harbor-layout.ts     键帽轮廓、高度场（布局公共层）
-src/coastal-materials.ts 本地确定性纹理与材质
-src/weather.tsx          雨丝与水面涟漪
-src/weather-model.ts     晴／阴／雨／雾的数值表（纯函数，可单测）
-src/studio.tsx           本地反射环境与软件渲染器探测
-src/studio-shadows.tsx   自研接触阴影（完整释放资源）
-scripts/verify.mjs       浏览器验收（无文案／控件状态／五个时刻／鱼群边界／渲停／移动端）
-scripts/crescent-acceptance.mjs  月湾产品验收（取景截图 + 扫光录屏 + 运动断言）
-outputs/                 每轮迭代的截图、检查记录与差距清单
-```
+## 许可与贡献
 
-React、TypeScript、Vite、Three.js、React Three Fiber、Drei、@react-three/postprocessing。无后端，默认场景不需要运行时远程模型、字体或 HDR 下载。
+原创代码和自行制作的模型采用 [MIT](LICENSE)。Poly Haven Coast Rocks 05 衍生资产保持 **CC0**，见 [素材来源](public/models/ASSET-SOURCES.md) 与 [第三方声明](NOTICE.md)。依赖遵循各自许可证。
 
-## 验证与边界
+参考作品：[resin-diorama-collection](https://github.com/luoban25/resin-diorama-collection)。未将该仓库源码或素材作为项目资产分发；致谢不代表拥有其许可。
 
-- `tsc -b` 0 错误；`pnpm test` 19/19 通过；`vite build` 通过。
-- 生产包按库拆分为 `three`(705 kB) / `three-fiber`(423 kB) / `three-post`(89 kB) / 应用(73 kB)，`dist` 合计约 1.3 MB。three 单块仍 >500 kB，属库本体体积。
-- `pnpm verify` 36 项浏览器检查：画面无标题与文案（只有作品本体、页标与控制条）、控件为胶囊 + 40px 圆形、按压缩 5% 后回弹、键盘焦点环可见、五个时刻刻度只有一个生效并在一个停留周期内填满、导入与拉近按钮已移除、白天灯塔不发光、点灯塔亮起、鱼群不出界／不沉底／不穿船、小船漂流时船体间隙始终为正、一次漂流两次复位、点水面起波并惊鱼、五个时刻的顺序与自动推进、雾与雨的浓度、晚上点亮与早上熄灭、暂停后 0 帧与过渡仍完成、移动端 44 px 点击区、无页面错误。
-- 检查环境是 Chrome / SwiftShader（约 2–3 fps），不能代表真实手机或硬件帧率。正式发布前需真机测试。
-- 月湾的逐项对照见 `outputs/crescent-acceptance-v11/README.md`：码头过渡、灯塔入口、夜间扫光通过；台地与入户通路的**铺装辨识度**、夜景光束强度仍待美术判定。
-- Draco / KTX2 需额外解码器，当前不支持；程序化场景未导出为独立 GLB；项目仅在本地运行，未发布。
+贡献前请读 [贡献说明](CONTRIBUTING.md) 和 [工作约定](agent.md)。新键先通过视觉方案，再进入建模。

@@ -2,26 +2,12 @@ node_modules/
 dist/
 *.tsbuildinfo
 work/
+outputs/
 *.log
 .DS_Store
 .env
 .env.*
 !.env.example
 .workbuddy/
-
-# Evidence stays local by default. The records below are committed because they
-# are the review, reproducible-check and acceptance trail for the current code
-# state; regenerate them with `pnpm verify` / `pnpm accept:crescent`.
-outputs/*
-!outputs/keyscape-prototype-*.png
-!outputs/verification.json
-!outputs/code-review-v09/
-!outputs/code-review-v09/**
-!outputs/gallery-verify-v11/
-!outputs/gallery-verify-v11/**
-outputs/gallery-verify-v11/*.png
-!outputs/memory-audit-v02/
-!outputs/memory-audit-v02/**
-!outputs/crescent-acceptance-v11/
-!outputs/crescent-acceptance-v11/**
-outputs/crescent-acceptance-v11/*.png
+*.blend
+*.blend1
