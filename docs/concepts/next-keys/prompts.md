@@ -1,5 +1,7 @@
 # Image generation prompts
 
+Decision update, 2026-10-26: only **Space — the far-side greenhouse** was accepted. Enter, Shift and all other proposals were rejected. Their original prompts below are archival only. For the next Space views, preserve the greenhouse composition but remove Earth from the sky to match the far-side setting; see README.md for the active specification.
+
 Generated with the built-in imagegen tool, 2026-10-26. These are concept images, not product screenshots or verified 3D assets.
 
 ## enter

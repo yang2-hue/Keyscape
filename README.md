@@ -2,7 +2,7 @@
 
 **把一颗键，变成一个值得停留的世界。**
 
-[在线体验](https://yang2-hue.github.io/Keyscape/) · [新一轮单键概念](docs/concepts/next-keys/README.md)
+[在线体验](https://yang2-hue.github.io/Keyscape/) · [下一阶段方案：Space 月背温室](docs/concepts/next-keys/README.md)
 
 An interactive keycap diorama built with React Three Fiber. 当前版本是一颗海岸主题艺术键：月牙形海湾、微缩村落和灯塔，以及实时变化的水面、天气与光照。
 
