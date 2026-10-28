@@ -180,13 +180,16 @@ export function createLunarBase(time: { value: number }, quality: Quality = 'ful
     // Crater floors and steep rims darken slightly; regolith also mottles.
     // Macro mottling: the tile cannot carry variation at this scale without
     // repeating, so the broad patches live in the vertex colours.
-    const shade = .98 + .02 * Math.sin(x * 21 + z * 17)
+    const shade = .98
       + .035 * (noise2(x * 2.6 + 4.2, z * 2.6 - 1.7) - .5)
       + .025 * (noise2(x * 5.9 - 2.3, z * 5.9 + 3.1) - .5)
       // The floor is darker because it is dust-filled and shadowed, not because
       // it is a hole: past ~0.12 of depth the darkening flattens out.
       - Math.min(.16, craterDepth(h) * 1.05);
-    const base = palette[i % palette.length];
+    // Spatial noise is independent of mesh resolution. Cycling by vertex index
+    // makes diagonal stripes, while a directional sine paints broad bands.
+    const tint = THREE.MathUtils.clamp(noise2(x * 3.7 + 8.1, z * 3.7 - 5.3), 0, 1);
+    const base = palette[1].clone().lerp(palette[3], tint);
     const c = base.clone().multiplyScalar(Math.max(.46, Math.min(1.02, shade)));
     colors.push(c.r, c.g, c.b);
   }
