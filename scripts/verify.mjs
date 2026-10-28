@@ -357,6 +357,52 @@ try {
   await page.waitForFunction(() => document.querySelector('canvas')?.dataset.renderMode === 'always', null, { timeout: 30000 });
   check('resuming restarts the loop', (await framesIn(page, 1500)) > 0 || await framesAdvance(page, 2), 'frames advanced');
 
+  // 9b. The second key: switch, moments, and its three interactions.
+  await page.getByRole('button', { name: 'SPACE / LUNAR' }).click();
+  const switched = await page.waitForFunction(() => document.querySelector('main')?.dataset.world === 'space', null, { timeout: 30000 }).then(() => true).catch(() => false);
+  await page.waitForFunction(() => window.__lunarLandmarks?.screen, null, { timeout: 180000 }).catch(() => {});
+  await page.evaluate(() => window.__galleryCycle.set(0));
+  await page.waitForFunction(() => document.querySelector('canvas')?.dataset.moment === 'terminator', null, { timeout: 60000 }).catch(() => {});
+  const lunar = await page.evaluate(() => ({
+    world: document.querySelector('main')?.dataset.world,
+    ticks: document.querySelectorAll('.moment-steps li').length,
+    label: document.querySelector('.moment-label')?.textContent ?? '',
+    moment: document.querySelector('canvas')?.dataset.moment,
+  }));
+  check('the spacebar switches in as its own world', switched && lunar.world === 'space', lunar);
+  check('the lunar loop holds four moments of its own', lunar.ticks === 4 && lunar.moment === 'terminator', lunar);
+  check('the lunar moment is named on the transport', /月球/.test(lunar.label), lunar.label);
+  await page.screenshot({ path: path.join(OUT, 'space-dawn.png') });
+
+  const anchors = await page.evaluate(() => window.__lunarLandmarks.screen());
+  const state = () => page.evaluate(() => window.__lunarLandmarks.state());
+  await page.mouse.click(...anchors.LunarAirlock);
+  const doorOpened = await page.waitForFunction(() => Number(window.__lunarLandmarks.state().door) > 0.7, null, { timeout: 60000 }).then(() => true).catch(() => false);
+  check('clicking the airlock opens the hatch', doorOpened, await state());
+  await page.mouse.click(...anchors.LunarAirlock);
+  const doorClosed = await page.waitForFunction(() => Number(window.__lunarLandmarks.state().door) < 0.2, null, { timeout: 60000 }).then(() => true).catch(() => false);
+  check('clicking the airlock again seals it', doorClosed, await state());
+
+  await page.mouse.click(...anchors.LunarGreenhouseShell);
+  const lightsOff = await page.waitForFunction(() => window.__lunarLandmarks.state().manual === false, null, { timeout: 60000 }).then(() => true).catch(() => false);
+  await page.mouse.click(...anchors.LunarGreenhouseShell);
+  const lightsOn = await page.waitForFunction(() => window.__lunarLandmarks.state().manual === true, null, { timeout: 60000 }).then(() => true).catch(() => false);
+  check('the greenhouse lights switch on and off by hand', lightsOff && lightsOn, await state());
+
+  await page.mouse.click(...anchors.LunarSolarArray);
+  const tilted = await page.waitForFunction(() => Number(window.__lunarLandmarks.state().tilt) > 0.1, null, { timeout: 60000 }).then(() => true).catch(() => false);
+  check('the solar array tilts toward the sun', tilted, await state());
+
+  await page.evaluate(() => window.__galleryCycle.set(3));
+  const nightCheck = await page.waitForFunction(() => document.querySelector('canvas')?.dataset.moment === 'night', null, { timeout: 60000 }).then(() => true).catch(() => false);
+  const nightLamp = await page.evaluate(() => Number(document.querySelector('canvas')?.dataset.lunarLamp));
+  check('the lunar night lights the interior', nightCheck && nightLamp > 0.5, { nightCheck, nightLamp });
+  await page.screenshot({ path: path.join(OUT, 'space-night.png') });
+
+  await page.getByRole('button', { name: 'C / COASTAL' }).click();
+  const backHome = await page.waitForFunction(() => document.querySelector('main')?.dataset.world === 'coastal', null, { timeout: 30000 }).then(() => true).catch(() => false);
+  check('the coastal key comes back', backHome, backHome);
+
   // 10. Mobile layout keeps 44px tap targets and never overflows.
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(2000);
@@ -374,7 +420,7 @@ try {
   await page.screenshot({ path: path.join(OUT, 'crescent-mobile.png') });
 
   check('no page errors', results.errors.length === 0, results.errors.slice(0, 3));
-  results.data = { playingFrames, pausedFrames, splash, cycle: { before, after }, weather: measured, smallestTapTarget: smallest };
+  results.data = { playingFrames, pausedFrames, splash, cycle: { before, after }, weather: measured, lunar, smallestTapTarget: smallest };
 } finally {
   await browser.close();
   results.passed = failures === 0;

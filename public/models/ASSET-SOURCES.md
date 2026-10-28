@@ -20,6 +20,14 @@
 - Created locally for Keyscape in Blender, 2026-10-26; no downloaded building geometry or textures.
 - Script: `scripts/blender/author-coastal-architecture.py`; editable working files and logs: `outputs/art-v22/`.
 - The cottage has a separate window mesh for live dusk lighting. The lighthouse is a static shell with a separately named door; its beacon animation and real-time lights are added by the app.
+- Updated 2026-10-28 with Blender 5.4.0 Alpha: embedded plaster/stone/wood albedo, normal and roughness maps; continuous closed gable, roof edges, shutters, copper lantern roof and curved masonry. Final bounding boxes match the previous assets. Latest editable files and comparison renders: `outputs/art-v29/` (local). The two cottage instances use independent live window materials.
+
+## harbor-gull.glb
+
+- Created locally for Keyscape in Blender on 2026-10-28; MIT, no downloaded geometry or textures.
+- Source: `scripts/blender/author-harbor-gull.py`. Editable source and preview: `outputs/gull-v29/` (local).
+- 1,796 triangles, 60,224 bytes. Left/right shoulder pivots `GullWingLeft` and `GullWingRight`; Y up, +Z forward, foot origin at Y=0.
+- The app animates the wing pivots and a bounded flight above the lagoon. Geometry and materials remain owned by the shared GLTF cache.
 
 ## fishing-boat.glb and timber-dock.glb
 
@@ -27,4 +35,4 @@
 - Script: `scripts/blender/author-harbor-props.py`; editable files and actual logs: `outputs/art-v23/`.
 - The boat is a static asset animated by the existing app. The dock aligns to the existing shore landing; both are validated against the existing collision bounds.
 
-These assets are integrated with the procedural terrain and dynamic scene. They are not a complete exported island. The five locally authored assets are distributed under the root MIT license; the Poly Haven derivative retains CC0.
+These assets are integrated with the procedural terrain and dynamic scene. They are not a complete exported island. The six locally authored assets are distributed under the root MIT license; the Poly Haven derivative retains CC0.

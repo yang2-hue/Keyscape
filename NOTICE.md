@@ -5,7 +5,7 @@
 [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). Powered by Poly Haven.
 This asset is excluded from the project's MIT claim; local processing does not alter its CC0 status.
 
-The other five bundled GLBs were made for this project with Blender scripts in
+The other six bundled GLBs were made for this project with Blender scripts in
 `scripts/blender/` and are distributed under the root MIT license.
 See `public/models/ASSET-SOURCES.md` for provenance and processing.
 

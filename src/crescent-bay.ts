@@ -217,6 +217,7 @@ export function createCrescentBay(time:{value:number},artAssets?:CoastalArtAsset
   }
   // Cottage window glass: warms up at dusk so the village looks inhabited.
   const windowMaterial=new THREE.MeshStandardMaterial({color:'#2e4a50',emissive:'#ffbf6e',emissiveIntensity:0,roughness:.4});
+  const windowMaterials=COTTAGES.map((_,i)=>i===0?windowMaterial:windowMaterial.clone());
   const windowLights:THREE.PointLight[]=[];
   // Sized so a fishing boat (~.62 long) is about as long as a cottage is wide.
   const cabins=COTTAGES;
@@ -235,7 +236,7 @@ export function createCrescentBay(time:{value:number},artAssets?:CoastalArtAsset
       cottage.position.set(cx,base,cz);cottage.rotation.y=ry;cottage.scale.set(c.w/.32,c.h/.24,c.d/.26);
       cottage.traverse(o=>{
         if(o instanceof THREE.Mesh){o.castShadow=o.receiveShadow=true;
-          if(o.name==='CottageWindowPanes')o.material=windowMaterial;
+          if(o.name==='CottageWindowPanes')o.material=windowMaterials[n];
         }
       });
       root.add(cottage);
@@ -274,7 +275,7 @@ export function createCrescentBay(time:{value:number},artAssets?:CoastalArtAsset
       // Warm pane in front of the glass; the shared windowMaterial breathes
       // emissive light when evening mode is on.
       const glow=local(side*(c.w/2+.022),0);
-      add('cottage-window',box,windowMaterial,{position:[glow[0],base+c.h*.62,glow[2]],scale:[.009,.058,.038],rotation:[0,ry,0]});
+      add('cottage-window-'+n,box,windowMaterials[n],{position:[glow[0],base+c.h*.62,glow[2]],scale:[.009,.058,.038],rotation:[0,ry,0]});
       cube([window[0],base+c.h*.62+.037,window[2]],[.014,.006,.082],'stone',[0,ry,0]);
     }
     const [chx,,chz]=local(c.w*.24,-c.d*.18);
@@ -403,26 +404,29 @@ export function createCrescentBay(time:{value:number},artAssets?:CoastalArtAsset
     }
     // Designed switchback: fixed endpoints and bounded risers, independent
     // of the natural slope. The terrain is graded beneath the same route.
+    const wornStep=new RoundedBoxGeometry(1,1,1,2,.045);geometries.add(wornStep);
+    let stepIndex=0;
     for(const step of stairTreads()){
       const x=(step.a.x+step.b.x)/2,z=(step.a.z+step.b.z)/2;
       const length=Math.hypot(step.b.x-step.a.x,step.b.z-step.a.z);
       // Consecutive treads meet at their boundaries. Extra length makes the
       // flat first flight overlap itself at exactly the same depth.
-      add('access-stairs',box,m.stone,{position:[x,step.top-.018,z],scale:[.14,.036,length],rotation:[0,Math.atan2(step.b.x-step.a.x,step.b.z-step.a.z),0],color:'#ddd3bc'});
+      const yaw=Math.atan2(step.b.x-step.a.x,step.b.z-step.a.z);
+      const shades=['#c6c0af','#d2cbb8','#bbb6a7','#d9d1bf'];
+      add('access-stairs',wornStep,m.stone,{position:[x,step.top-.018,z],scale:[.14,.036,length],rotation:[0,yaw,0],color:shades[stepIndex++%4]});
+      // Bedded masonry supports connect each tread to the cut bank.
+      const bottom=Math.min(crescentHeight(x,z)-.06,step.top-.09),height=step.top-.036-bottom;
+      const courses=Math.max(1,Math.ceil(height/.035));
+      for(let row=0;row<courses;row++)add('stair-foundations',wornStep,m.stone,{position:[x,bottom+(row+.5)*height/courses,z],scale:[.128,height/courses-.001,length*.96],rotation:[0,yaw,0],color:shades[(row+stepIndex)%4]});
     }
     for(const p of SHORE_STAIRS){
       // A small stone threshold sits above both the adjoining tread and the
       // timber deck; identical top heights previously fought in the overlap.
-      add('access-landings',box,m.stone,{position:[p.x,p.y-.025+.003,p.z],scale:[.16,.05,.16],color:'#e3dac5'});
+      for(let ix=0;ix<2;ix++)for(let iz=0;iz<2;iz++)add('access-landings',wornStep,m.stone,{position:[p.x+(ix-.5)*.08,p.y-.025+.003,p.z+(iz-.5)*.08],scale:[.079,.05,.079],color:ix===iz?'#d0c8b5':'#c1bba9'});
+      const bottom=Math.min(crescentHeight(p.x,p.z)-.06,p.y-.12),height=p.y-.047-bottom;
+      for(let row=0;row<3;row++)add('landing-masonry',wornStep,m.stone,{position:[p.x,bottom+(row+.5)*height/3,p.z],scale:[.15,height/3-.001,.15],color:row%2?'#bcb5a4':'#c8c0ae'});
     }
-    // A gull perched on the far mooring post.
-    const gull=new THREE.Group();
-    const gpx=ex+Math.cos(perp)*-.32*platW*.9,gpz=ez+Math.sin(perp)*-.32*platW*.9,gpy=deckY+.155;
-    gull.position.set(gpx,gpy,gpz);gull.rotation.y=axis+2.4;root.add(gull);
-    const body=mesh(new THREE.SphereGeometry(.024,10,8),m.ivory,[0,0,0],gull);body.scale.set(1.5,1,1);
-    mesh(new THREE.SphereGeometry(.011,8,6),m.ivory,[.028,.012,0],gull);
-    const beak=mesh(new THREE.ConeGeometry(.004,.014,6),m.orange,[.048,.010,0],gull);beak.rotation.z=-Math.PI/2;
-    const tail=mesh(new THREE.ConeGeometry(.010,.026,6),m.ivory,[-.036,.002,0],gull);tail.rotation.z=Math.PI/2;
+    // The independently animated Blender gull is mounted by CrescentStudy.
   }
   // Vegetation stays subordinate to the crescent silhouette. The stair line
   // to the landing and the path stay clear of sprouting grass.
@@ -492,12 +496,18 @@ export function createCrescentBay(time:{value:number},artAssets?:CoastalArtAsset
     }
   };
   paved(MAIN_PATH);HOUSE_PATHS.forEach(paved);
-  // A low stone parapet protects the lagoon edge; leave the stair entrance open.
-  for(let i=1;i<MAIN_PATH.length;i++){
-    const angle=-3.45+(i-.5)/99*2.77,p=islandPoint(angle,.878);
-    if(SHORE_STAIRS.slice(1).some((b,j)=>nearestOnSegment(p.x,p.z,SHORE_STAIRS[j],b).distance<.13))continue;
-    const bottom=Math.min(crescentHeight(p.x,p.z),TERRACE),height=TERRACE+.07-bottom;
-    add('path-parapet',box,m.stone,{position:[p.x,bottom+height/2,p.z],scale:[.027,height,.878*2.77/99+.005],rotation:[0,-angle,0],color:i%4?'#d7ceb9':'#e6ddc6'});
+  // Staggered limestone courses replace the tall fence-like vertical strips.
+  const masonry=new RoundedBoxGeometry(1,1,1,2,.055);geometries.add(masonry);
+  const shades=['#bbb5a5','#c9c2b0','#d1c9b6','#c0b9a8'];
+  for(let row=0;row<12;row++)for(let i=0;i<39;i++){
+    const angle=-3.45+(i+.5+(row%2)*.5)/39*2.77;
+    if(angle>-.68)continue;
+    const p=islandPoint(angle,.878);
+    if(SHORE_STAIRS.slice(1).some((b,j)=>nearestOnSegment(p.x,p.z,SHORE_STAIRS[j],b).distance<.14))continue;
+    const top=TERRACE+.065-row*.038,bottom=Math.min(crescentHeight(p.x,p.z),TERRACE)-.018;
+    if(top<=bottom)continue;
+    const h=Math.min(.036,top-bottom);
+    add('path-parapet',masonry,m.stone,{position:[p.x,top-h/2,p.z],scale:[row===0?.039:.033,h,.878*2.77/39-.002],rotation:[0,-angle,0],color:shades[(i+row*3)%4]});
   }
   // A continuous paved apron joins the inward-facing lighthouse door.
   const tdoor=islandPoint(TOWER.a,TOWER.r-.105);paved([islandPoint(TOWER.a,.94),tdoor]);
@@ -600,5 +610,5 @@ export function createCrescentBay(time:{value:number},artAssets?:CoastalArtAsset
   }
   const disposeArt=artAssets?addCoastalArt(root,artAssets,crescentHeight):undefined;
   root.updateMatrixWorld(true);
-  return {root,boat,fish,fishActors,beacon,beamMaterial,setBeamStrength,searchLight,footprint:bayFootprint(),lanternMaterial,lanternLight,haloMaterial,windowMaterial,windowLights,dispose(){disposeArt?.();root.traverse(object=>{if(object instanceof THREE.InstancedMesh)object.dispose();});geometries.forEach(g=>g.dispose());palette.dispose();terrainMaterial.dispose();extraTextures.forEach(t=>t.dispose());hullMaterial.dispose();lanternMaterial.dispose();haloMaterial.dispose();haloTexture.dispose();windowMaterial.dispose();beamMaterial.dispose();searchLight.dispose();}};
+  return {root,boat,fish,fishActors,beacon,beamMaterial,setBeamStrength,searchLight,footprint:bayFootprint(),lanternMaterial,lanternLight,haloMaterial,windowMaterial,windowMaterials,windowLights,dispose(){disposeArt?.();root.traverse(object=>{if(object instanceof THREE.InstancedMesh)object.dispose();});geometries.forEach(g=>g.dispose());palette.dispose();terrainMaterial.dispose();extraTextures.forEach(t=>t.dispose());hullMaterial.dispose();lanternMaterial.dispose();haloMaterial.dispose();haloTexture.dispose();windowMaterials.forEach(m=>m.dispose());beamMaterial.dispose();searchLight.dispose();}};
 }

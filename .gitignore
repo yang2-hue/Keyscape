@@ -11,3 +11,6 @@ outputs/
 .workbuddy/
 *.blend
 *.blend1
+
+# Local publish marker (WorkBuddy app identity), not part of the source.
+.wbapp_*.genie

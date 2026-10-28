@@ -6,8 +6,27 @@ import { EffectComposer, SSAO, Bloom, Vignette } from '@react-three/postprocessi
 import * as THREE from 'three';
 import { StudioEnvironment, useSoftwareRenderer } from './studio';
 import CrescentStudy from './CrescentStudy';
+import LunarStudy, { LunarAtmosphere } from './LunarStudy';
 import { nextView, type View } from './gallery-state';
 import { WEATHERS, weatherParams,KEY_LIGHT_POSITION, type WeatherKind } from './weather-model';
+import { LUNAR_MOMENTS, lunarSurface, type LunarMoment } from './lunar-weather';
+
+export type World = 'coastal' | 'space';
+
+/** The two keys in the exhibition. The label is also the switcher, so the
+ * chrome stays at one line. */
+const WORKS: { id: World; label: string }[] = [
+  { id: 'coastal', label: 'C / COASTAL' },
+  { id: 'space', label: 'SPACE / LUNAR' },
+];
+/** How much world each key needs in frame; the spacebar is longer and flatter,
+ * so it can be shown larger without clipping. */
+const FRAME: Record<World, { width: number; height: number; floor: number; camera: [number, number, number] }> = {
+  coastal: { width: 5.2, height: 4.8, floor: -0.83, camera: [5.6, 5.7, 6.2] },
+  // The spacebar is long and flat: a lower eye keeps the slab from reading as a
+  // cream brick, and the extra distance fits 3.64 units of key in frame.
+  space: { width: 3.95, height: 2.95, floor: -0.24, camera: [5.0, 3.9, 6.6] },
+};
 
 /** Five moments, in order: morning clear, morning rain, evening clear, evening
  * fog, evening rain. The exhibition changes on its own — weather and time of
@@ -39,7 +58,9 @@ function useReducedMotion() {
 /** Holds each moment for `DWELL_MS`, then moves on only while playing.
  * Pause, reduced motion and hidden tabs cancel the timer. Resuming starts a
  * fresh dwell for the current moment, synchronized with the tick's sweep. */
-function useAutoCycle(running: boolean) {
+type MomentState = { id?: string; weather?: string; night: boolean };
+function useAutoCycle(running: boolean, states: readonly MomentState[]) {
+  const length = states.length;
   const [step, setStep] = useState(0);
   const [revision, setRevision] = useState(0);
   // Bumped whenever the dwell timer is (re)armed, so the tick's sweep restarts
@@ -55,7 +76,7 @@ function useAutoCycle(running: boolean) {
       window.clearTimeout(timer);
       setRun(value => value + 1);
       timer = window.setTimeout(() => {
-        if (!held.current && !document.hidden && running) setStep(value => (value + 1) % CYCLE.length);
+        if (!held.current && !document.hidden && running) setStep(value => (value + 1) % length);
       }, DWELL_MS);
     };
     const onVisibility = () => {
@@ -65,7 +86,7 @@ function useAutoCycle(running: boolean) {
     if (!document.hidden && !held.current && running) arm();
     document.addEventListener('visibilitychange', onVisibility);
     return () => { window.clearTimeout(timer); document.removeEventListener('visibilitychange', onVisibility); };
-  }, [step, revision, running]);
+  }, [step, revision, running, length]);
   // Dev-only handle: the evidence harness has to reach a given moment without
   // waiting through the whole loop, and has to freeze the loop while it takes
   // screenshots. Never present in a production build.
@@ -74,7 +95,7 @@ function useAutoCycle(running: boolean) {
     const debug = window as unknown as Record<string, unknown>;
     debug.__galleryCycle = {
       set(index: number) {
-        const next = ((index % CYCLE.length) + CYCLE.length) % CYCLE.length;
+        const next = ((index % length) + length) % length;
         held.current = true;
         // Cancel synchronously: waiting for React's effect cleanup lets an
         // already armed timer overtake this requested preset on slow renders.
@@ -83,15 +104,18 @@ function useAutoCycle(running: boolean) {
         setRevision(value => value + 1);
         // Report the *requested* state: reading `step` here would still see the
         // previous render's value.
-        return { step: next, ...CYCLE[next], dwell: DWELL_MS };
+        return { step: next, ...states[next], dwell: DWELL_MS };
       },
       resume() { held.current = false; setRevision(value => value + 1); },
-      state() { return { step, ...CYCLE[step], dwell: DWELL_MS, running }; },
-      states: CYCLE,
+      state() { return { step, ...states[step], dwell: DWELL_MS, running }; },
+      states,
     };
     return () => { delete debug.__galleryCycle; };
-  }, [step, running]);
-  return { ...CYCLE[step], step, run };
+  }, [step, running, length, states]);
+  // Switching keys changes how many moments there are; never leave the index
+  // pointing past the end of the new list.
+  useEffect(() => { if (step >= length) setStep(0); }, [step, length]);
+  return { step, run };
 }
 
 /** A render failure used to be permanent: the boundary never reset, so the
@@ -104,14 +128,14 @@ class SceneBoundary extends Component<{ children: ReactNode }, { failed: boolean
   }
 }
 
-function CameraRig({ view, reduced }: { view: View; reduced: boolean }) {
+function CameraRig({ view, reduced, frame, focusY }: { view: View; reduced: boolean; frame: { width: number; height: number; camera: [number, number, number] }; focusY: [number, number] }) {
   const size = useThree(state => state.size);
   const invalidate = useThree(state => state.invalidate);
   const controls = useRef<ComponentRef<typeof OrbitControls>>(null);
   const moving = useRef(false);
   const goal = useRef(new THREE.Vector3(5.6, 5.7, 6.2));
   const target = useRef(new THREE.Vector3(0, 0.35, 0));
-  const baseZoom=Math.min(size.width/5.2,size.height/4.8);
+  const baseZoom=Math.min(size.width/frame.width,size.height/frame.height);
   const zoomGoal=useRef(baseZoom);
   // Dev-only camera handle. The acceptance harness needs reproducible
   // viewpoints (dock landing, cottage door, lighthouse entrance) that a scripted
@@ -156,11 +180,11 @@ function CameraRig({ view, reduced }: { view: View; reduced: boolean }) {
     return () => { if (debug.__galleryCamera) delete debug.__galleryCamera; };
   }, [invalidate]);
   useEffect(() => {
-    goal.current.set(5.6,5.7,6.2);zoomGoal.current=baseZoom*(view.kind==='close'?1.25:1);
-    target.current.set(0, view.kind === 'close' ? 0.48 : 0.20, 0);
+    goal.current.set(...frame.camera);zoomGoal.current=baseZoom*(view.kind==='close'?1.25:1);
+    target.current.set(0, view.kind === 'close' ? focusY[1] : focusY[0], 0);
     moving.current = true;
     invalidate();
-  }, [view, baseZoom, invalidate]);
+  }, [view, baseZoom, focusY, invalidate]);
   useFrame((_, dt) => {
     const ctl = controls.current;
     if (!ctl || !moving.current) return;
@@ -176,7 +200,7 @@ function CameraRig({ view, reduced }: { view: View; reduced: boolean }) {
     if (ctl.object.position.distanceTo(goal.current) < 0.008&&ctl.target.distanceTo(target.current)<.008&&zoomSettled) moving.current = false;
   });
   return <>
-    <OrthographicCamera makeDefault position={[5.6,5.7,6.2]} zoom={baseZoom} near={.1} far={80}/>
+    <OrthographicCamera makeDefault position={frame.camera} zoom={baseZoom} near={.1} far={80}/>
     <OrbitControls ref={controls} makeDefault enablePan={false} minDistance={4.1} maxDistance={16} minZoom={baseZoom*.65} maxZoom={baseZoom*1.9} minPolarAngle={0.25} maxPolarAngle={1.42} enableDamping dampingFactor={0.075} onStart={() => { moving.current = false; }} />
   </>;
 }
@@ -290,27 +314,29 @@ function DemandPump({ boost, playing }: { boost: string; playing: boolean }) {
   return null;
 }
 
-function PostChain() {
+function PostChain({ space = false }: { space?: boolean }) {
   const software = useSoftwareRenderer();
   return <>{!software && <SoftShadows size={8} samples={16} focus={.18} />}<EffectComposer multisampling={software ? 0 : 4} enableNormalPass>
     <SSAO samples={software ? 8 : 24} radius={.07} intensity={1.05} luminanceInfluence={.85} bias={.02} />
-    <Bloom intensity={.07} luminanceThreshold={1.25} mipmapBlur />
-    <Vignette offset={.12} darkness={.08} />
+    <Bloom intensity={space ? .16 : .07} luminanceThreshold={space ? 1.5 : 1.25} mipmapBlur />
+    <Vignette offset={space ? .2 : .12} darkness={space ? .55 : .08} />
   </EffectComposer></>;
 }
 
-function GalleryScene({ playing, night, weather, view, reduced, onReady }: { playing: boolean; night: boolean; weather: WeatherKind; view: View; reduced: boolean; onReady: () => void }) {
-  return <Canvas shadows dpr={[1, 2]} frameloop={playing ? 'always' : 'demand'} camera={{ position: [5.6, 5.7, 6.2], near: 0.1, far: 80 }} gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }} onCreated={({ gl }) => { gl.toneMapping = THREE.ACESFilmicToneMapping; onReady(); }} fallback={<div className="scene-fallback">当前浏览器不支持 3D 展示。</div>}>
+function GalleryScene({ playing, world, night, weather, moment, view, reduced, onReady }: { playing: boolean; world: World; night: boolean; weather: WeatherKind; moment: LunarMoment; view: View; reduced: boolean; onReady: () => void }) {
+  const frame = FRAME[world];
+  const space = world === 'space';
+  return <Canvas shadows dpr={[1, 2]} frameloop={playing ? 'always' : 'demand'} camera={{ position: [5.6, 5.7, 6.2], near: 0.1, far: 80 }} gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }} onCreated={({ gl }) => { gl.toneMapping = THREE.ACESFilmicToneMapping; gl.toneMappingExposure = 1.12; onReady(); }} fallback={<div className="scene-fallback">当前浏览器不支持 3D 展示。</div>}>
     <QualityProfile />
-    <DemandPump boost={`${view.kind}:${view.serial}:${night ? 1 : 0}:${weather}`} playing={playing} />
-    <Atmosphere night={night} weather={weather} />
+    <DemandPump boost={`${world}:${view.kind}:${view.serial}:${space ? moment : `${night ? 1 : 0}:${weather}`}`} playing={playing} />
+    {space ? <LunarAtmosphere moment={moment} /> : <Atmosphere night={night} weather={weather} />}
     <Suspense fallback={null}>
       <StudioEnvironment />
-      <CrescentStudy playing={playing} night={night} weather={weather} />
-      <StudioShadows frames={1} position={[0, -0.83, 0]} opacity={0.35} scale={12} blur={2.7} far={5} resolution={512} color="#555345" />
+      {space ? <LunarStudy playing={playing} moment={moment} /> : <CrescentStudy playing={playing} night={night} weather={weather} />}
+      <StudioShadows frames={1} position={[0, frame.floor, 0]} opacity={space ? .5 : .35} scale={12} blur={2.7} far={5} resolution={512} color={space ? '#191a1d' : '#555345'} />
     </Suspense>
-    <CameraRig view={view} reduced={reduced} />
-    <PostChain />
+    <CameraRig view={view} reduced={reduced} frame={frame} focusY={space ? [.16, .34] : [.2, .48]} />
+    <PostChain space={space} />
   </Canvas>;
 }
 
@@ -318,19 +344,34 @@ export default function App() {
   const [playing, setPlaying] = useState(true);
   const reduced = useReducedMotion();
   const running = playing && !reduced;
-  const { weather, night, step, run } = useAutoCycle(running);
+  const [world, setWorld] = useState<World>(() => new URLSearchParams(window.location.search).get('work') === 'space' ? 'space' : 'coastal');
+  const cycle = world === 'space' ? LUNAR_MOMENTS : CYCLE;
+  const { step, run } = useAutoCycle(running, cycle);
+  const moments = cycle.length;
   const [ready, setReady] = useState(false);
   const [view, setView] = useState<View>({ kind: 'home', serial: 0 });
   const assetProgress = useProgress();
 
-  const weatherLabel = WEATHERS.find(item => item.id === weather)?.title ?? '晴天';
+  const coastal = CYCLE[Math.min(step, CYCLE.length - 1)];
+  const lunar = LUNAR_MOMENTS[Math.min(step, LUNAR_MOMENTS.length - 1)];
+  const night = world === 'space' ? lunar.night : coastal.night;
+  const label = world === 'space'
+    ? `月球 · ${lunar.label}`
+    : `${night ? '晚上' : '早上'} · ${WEATHERS.find(item => item.id === coastal.weather)?.title ?? '晴天'}`;
+  const surface = world === 'space' ? `space ${lunarSurface(lunar.id)}` : `${night ? 'night ' : ''}weather-${coastal.weather}`;
   const progress = Math.round(assetProgress.progress);
 
-  return <main className={`gallery ${night ? 'night' : ''} weather-${weather}`} data-motion={running ? 'running' : 'paused'} style={{ '--dwell': `${DWELL_MS}ms` } as CSSProperties}>
+  const pick = (next: World) => {
+    if (next === world) return;
+    setWorld(next);
+    setView(v => nextView(v, 'home'));
+  };
+
+  return <main className={`gallery ${surface}`} data-motion={running ? 'running' : 'paused'} data-world={world} style={{ '--dwell': `${DWELL_MS}ms` } as CSSProperties}>
     <header className="masthead"><a className="wordmark" href={import.meta.env.BASE_URL} aria-label="Keyscape 首页">keyscape</a><span className="edition">INTERACTIVE STUDIES / 001</span></header>
 
     <section className="art-stage" aria-label="可旋转的三维艺术键">
-      <SceneBoundary><GalleryScene playing={running} night={night} weather={weather} view={view} reduced={reduced} onReady={() => setReady(true)} /></SceneBoundary>
+      <SceneBoundary><GalleryScene playing={running} world={world} night={night} weather={coastal.weather} moment={lunar.id} view={view} reduced={reduced} onReady={() => setReady(true)} /></SceneBoundary>
       {(!ready || assetProgress.active) && <div className="loading" role="status">
         <span className="loading-row"><span>正在布置展厅</span><span className="loading-value">{progress}%</span></span>
         <span className="loading-track"><span className="loading-fill" style={{ transform: `scaleX(${progress / 100})` }} /></span>
@@ -338,15 +379,17 @@ export default function App() {
     </section>
 
     <footer className="gallery-footer">
-      <span className="study-label">C / COASTAL STUDY</span>
+      <div className="work-switch" role="group" aria-label="选择作品">
+        {WORKS.map(work => <button key={work.id} className="work-option" aria-pressed={work.id === world} onClick={() => pick(work.id)}>{work.label}</button>)}
+      </div>
       <div className="transport" role="group" aria-label="作品控制">
 
       {/* The exhibition runs on its own, so the frame has to say where in the
-          loop it is. Five ticks, one filled: the label reads, the ticks count. */}
+          loop it is. The label reads it, the ticks count it. */}
       <div className="moment">
-        <span className="moment-label" aria-live="polite">{night ? '晚上' : '早上'} · {weatherLabel}</span>
+        <span className="moment-label" aria-live="polite">{label}</span>
         <ol className="moment-steps" aria-hidden="true">
-          {CYCLE.map((_, index) => <li key={index} className={index < step ? 'done' : index === step ? 'now' : ''}>
+          {Array.from({ length: moments }, (_, index) => <li key={index} className={index < step ? 'done' : index === step ? 'now' : ''}>
             {index === step ? <span key={`${step}:${run}`} className="moment-fill" /> : null}
           </li>)}
         </ol>

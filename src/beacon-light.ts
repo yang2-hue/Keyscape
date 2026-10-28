@@ -32,6 +32,9 @@ export function createBeaconVolume(){
       }`
   });
   const beam=new THREE.Mesh(geometry,material);beam.name='LighthouseBeam';
+  // Raycasters still intersect invisible meshes. A visual-only light cone
+  // must never steal a click from a cottage, dock or the water behind it.
+  beam.raycast=()=>{};
   beam.visible=false;
   beam.castShadow=beam.receiveShadow=false;beam.userData.ignoreHeightfield=true;
   const inverse=new THREE.Matrix4();

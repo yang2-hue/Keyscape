@@ -1,4 +1,4 @@
-import {useCallback,useEffect,useMemo,useRef} from 'react';
+import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {useFrame,useThree,type ThreeEvent} from '@react-three/fiber';
 import * as THREE from 'three';
 import {useGLTF} from '@react-three/drei';
@@ -9,6 +9,8 @@ import {deformFish,fishBend,stepSpring,turnToward} from './scene-motion';
 import HarborWater from './HarborWater';
 import {Weather} from './weather';
 import {isWet,type WeatherKind} from './weather-model';
+import {toggleCottageLight,cottageLightTarget,type CoastalAction,type CoastalActionKind} from './coastal-interactions';
+import HarborGull from './HarborGull';
 
 /** Module-level constant: an inline array literal would change identity on
  * every render, rebuild the water uniforms and reset their damped values. */
@@ -34,14 +36,14 @@ const FISH_MIN_DEPTH=.16;
 const FISH_BOAT_CLEARANCE=.17;
 
 /** The three clickable landmarks. Everything else in the study is scenery. */
-type Landmark='Lighthouse'|'CrescentBoat'|'CrescentFish'|'';
+type Landmark='Lighthouse'|'CrescentBoat'|'CrescentFish'|'CoastalCottage-0'|'CoastalCottage-1'|'DetailedHarborDock'|'';
 
 /** Nearest named ancestor: a click lands on a tower window or a boat plank, and
  * what matters is which landmark it belongs to. */
 function landmarkOf(object:THREE.Object3D):Landmark{
   let node:THREE.Object3D|null=object;
   while(node){
-    if(node.name==='Lighthouse'||node.name==='CrescentBoat'||node.name==='CrescentFish')return node.name;
+    if(node.name==='Lighthouse'||node.name==='CrescentBoat'||node.name==='CrescentFish'||node.name==='CoastalCottage-0'||node.name==='CoastalCottage-1'||node.name==='DetailedHarborDock')return node.name;
     node=node.parent;
   }
   return '';
@@ -69,7 +71,7 @@ const lerpAngle=(a:number,b:number,t:number)=>a+Math.atan2(Math.sin(b-a),Math.co
 /** Fish wander the lagoon individually instead of riding a shared loop:
  * smooth pseudo-random turning, per-fish speed, shallow-water and boat
  * avoidance. Headings are steered back toward the lagoon center. */
-export default function CrescentStudy({playing,night,weather}:{playing:boolean;night:boolean;weather:WeatherKind}){
+export default function CrescentStudy({playing,night,weather,action}:{playing:boolean;night:boolean;weather:WeatherKind;action?:CoastalAction}){
   const gl=useThree(state=>state.gl),invalidate=useThree(state=>state.invalidate),camera=useThree(state=>state.camera);
   const time=useMemo(()=>({value:0}),[]);
   const [rockAsset,oliveAsset,cottageAsset,lighthouseAsset,boatAsset,dockAsset]=useGLTF([
@@ -89,9 +91,24 @@ export default function CrescentStudy({playing,night,weather}:{playing:boolean;n
   // Interaction state lives in refs: it changes every frame and must not
   // re-render the tree (which would rebuild the water uniforms).
   const flash=useRef(0);
+  const cottageOverrides=useRef<(boolean|null)[]>([null,null]);
+  const [gullTrigger,setGullTrigger]=useState(0);
+  const act=useCallback((kind:CoastalActionKind)=>{
+    if(!playing||document.hidden)return;
+    if(kind==='gull')setGullTrigger(value=>value+1);
+    else if(kind==='lights-auto')cottageOverrides.current=[null,null];
+    else{const index=kind==='cottage-0'?0:1;cottageOverrides.current[index]=toggleCottageLight(cottageOverrides.current[index],night);}
+    invalidate();
+  },[playing,night,invalidate]);
+  const lastAction=useRef(0);
+  useEffect(()=>{
+    if(!action||action.id===lastAction.current)return;
+    lastAction.current=action.id;act(action.kind);
+  },[action,act]);
   const startle=useRef(0);
   const startleAt=useRef(new THREE.Vector2(BERTH.x,BERTH.z));
   const hovering=useRef(false);
+  useEffect(()=>{if(!playing){hovering.current=false;document.body.style.cursor='';}},[playing]);
   // Boat: moored at the berth, drifting a lap of the lagoon, or coming home.
   const boatMode=useRef<'moored'|'drift'|'return'>('moored');
   const lap=useRef(0);
@@ -194,7 +211,9 @@ export default function CrescentStudy({playing,night,weather}:{playing:boolean;n
   function pointLandmark(event:ThreeEvent<MouseEvent>):Landmark{
     const role=landmarkOf(event.object);
     if(!role)return '';
-    if(role==='Lighthouse')flash.current=FLASH_SECONDS;
+    if(role==='CoastalCottage-0'||role==='CoastalCottage-1')act(role==='CoastalCottage-0'?'cottage-0':'cottage-1');
+    else if(role==='DetailedHarborDock')act('gull');
+    else if(role==='Lighthouse')flash.current=FLASH_SECONDS;
     else if(role==='CrescentBoat'){
       // First click: drift. Second click: come home and moor again.
       if(boatMode.current==='moored'){boatMode.current='drift';lap.current=0;drift.current={x:pose.current.x,z:pose.current.z};}
@@ -217,9 +236,9 @@ export default function CrescentStudy({playing,night,weather}:{playing:boolean;n
     startle.current=2.4;
     invalidate();
   },[invalidate]);
-  function onClick(event:ThreeEvent<MouseEvent>){ if(pointLandmark(event))event.stopPropagation(); }
+  function onClick(event:ThreeEvent<MouseEvent>){ if(!playing||document.hidden||event.delta>6)return;if(pointLandmark(event))event.stopPropagation(); }
   function onMove(event:ThreeEvent<PointerEvent>){
-    const interactive=landmarkOf(event.object)!=='';
+    const interactive=playing&&landmarkOf(event.object)!=='';
     if(interactive!==hovering.current){hovering.current=interactive;document.body.style.cursor=interactive?'pointer':'';}
   }
   function onOut(){ if(hovering.current){hovering.current=false;document.body.style.cursor='';} }
@@ -227,7 +246,7 @@ export default function CrescentStudy({playing,night,weather}:{playing:boolean;n
   useFrame((_,dt)=>{try{dynamics.advance(dt,playing,rainy);time.value=dynamics.time;}catch(e){if(import.meta.env.DEV){gl.domElement.dataset.advanceError=String((e as Error)?.stack??e);}throw e;}if(import.meta.env.DEV){const d=gl.domElement.dataset;d.advanceCalls=String(Number(d.advanceCalls??0)+1);d.advancePlaying=String(playing);d.advanceRainy=String(rainy);d.advanceDt=String(dt);d.advanceSteps=String(dynamics.steps);}}, -2);
 
   useFrame(({gl,camera},dt)=>{
-    const delta=Math.min(dt,.05),t=dynamics.time,heading=BERTH.heading;
+    const delta=document.hidden?0:Math.min(dt,.05),t=dynamics.time,heading=BERTH.heading;
     if(playing){
       flash.current=Math.max(0,flash.current-delta);
       startle.current=Math.max(0,startle.current-delta);
@@ -279,7 +298,7 @@ export default function CrescentStudy({playing,night,weather}:{playing:boolean;n
     hitProxy.rotation.y=bh;
     study.boat.userData.motionTime=t;
     study.fish.children.forEach((fish,i)=>{
-      const phase=i*1.47,effort=.9+i*.045;
+      const phase=i*1.47;
       const st=fish.userData.wander??(fish.userData.wander={x:CRESCENT.cx+(i%2?.20:-.22),z:CRESCENT.cz+(i<2?.18:-.16),heading:i*1.9,speed:.085+i*.016,turn:0});
       if(playing){
         // Smooth wandering: two slow sines never repeat a circle.
@@ -288,7 +307,7 @@ export default function CrescentStudy({playing,night,weather}:{playing:boolean;n
         const shallow=field.sample(lookX,lookZ)>HARBOR.water-FISH_MIN_DEPTH;
         const far=Math.hypot(lookX-CRESCENT.cx,lookZ-CRESCENT.cz)>FISH_RADIUS-.04;
         const nearBoat=Math.hypot(st.x-bx,st.z-bz)<FISH_BOAT_CLEARANCE+.06;
-        if(startle.current>0){
+        if(startle.current>0&&!shallow&&!far&&!nearBoat){
           // Scatter: run straight away from the tap, faster than cruising.
           const away=Math.atan2(st.z-startleAt.current.y,st.x-startleAt.current.x);
           st.heading=turnToward(st.heading,away,delta*7);
@@ -298,10 +317,29 @@ export default function CrescentStudy({playing,night,weather}:{playing:boolean;n
         }else if(nearBoat){
           st.heading=turnToward(st.heading,Math.atan2(st.z-bz,st.x-bx),delta*5);
         }
-        const speed=st.speed*(startle.current>0?2.9:1);
-        const previous=fish.rotation.y,vx=Math.cos(st.heading)*speed,vz=Math.sin(st.heading)*speed;
-        st.x+=vx*delta;st.z+=vz*delta;
-        fish.rotation.y=turnToward(previous,Math.atan2(-vz,vx),delta);
+        // Neighbours repel gently, leaving each fish its own swimming lane.
+        if(!shallow&&!far&&!nearBoat&&startle.current<=0){
+          for(const other of study.fish.children){if(other===fish)continue;
+            const ox=st.x-other.position.x,oz=st.z-other.position.z,d=Math.hypot(ox,oz);
+            if(d>.001&&d<.14)st.heading=turnToward(st.heading,Math.atan2(oz,ox),delta*(.14-d)*3);
+          }
+        }
+        const fear=THREE.MathUtils.smoothstep(startle.current,0,2.4);
+        const targetSpeed=st.speed*(.65+.25*(1+Math.sin(t*.48+phase)))*(1+fear*1.4);
+        st.velocity=THREE.MathUtils.damp(st.velocity??st.speed,targetSpeed,2.5,delta);
+        const speed=st.velocity;
+        // The body and displacement share a damped heading instead of sliding sideways.
+        const previous=fish.rotation.y;
+        fish.rotation.y=turnToward(previous,-st.heading,delta*.55);
+        const vx=Math.cos(-fish.rotation.y)*speed,vz=Math.sin(-fish.rotation.y)*speed;
+        const nx=st.x+vx*delta,nz=st.z+vz*delta;
+        const safe=field.sample(nx,nz)<HARBOR.water-FISH_MIN_DEPTH&&Math.hypot(nx-CRESCENT.cx,nz-CRESCENT.cz)<FISH_RADIUS;
+        if(safe){st.x=nx;st.z=nz;}
+        else{
+          st.velocity=THREE.MathUtils.damp(st.velocity,0,7,delta);
+          st.heading=turnToward(st.heading,Math.atan2(CRESCENT.cz-st.z,CRESCENT.cx-st.x),delta*4);
+        }
+        
         st.turn=THREE.MathUtils.clamp(Math.atan2(Math.sin(fish.rotation.y-previous),Math.cos(fish.rotation.y-previous))/Math.max(delta,.001),-.9,.9);
       }
       // Soft bounds: steer away from the shore and ease the position back, so a
@@ -310,7 +348,7 @@ export default function CrescentStudy({playing,night,weather}:{playing:boolean;n
       const bed=field.sample(st.x,st.z);
       const tooShallow=bed>HARBOR.water-FISH_MIN_DEPTH;
       const tooFar=dist>FISH_RADIUS;
-      if(tooShallow||tooFar){
+      if(playing&&(tooShallow||tooFar)){
         // Deepest direction from the local bed gradient, or straight inward.
         let ex:number,ez:number;
         if(tooShallow){
@@ -322,7 +360,7 @@ export default function CrescentStudy({playing,night,weather}:{playing:boolean;n
         const len=Math.hypot(ex,ez)||1;
         if(playing){st.heading=turnToward(st.heading,Math.atan2(ez/len,ex/len),delta*4);}
         // Gentle positional correction proportional to how far out it is.
-        const excess=Math.max(0,dist-FISH_RADIUS)+Math.max(0,(HARBOR.water-FISH_MIN_DEPTH)-bed);
+        const excess=Math.max(0,dist-FISH_RADIUS)+Math.max(0,bed-(HARBOR.water-FISH_MIN_DEPTH));
         const push=Math.min(.02,excess*.5)*delta*10;
         st.x+=(ex/len)*push;st.z+=(ez/len)*push;
         // Emergency only: anything this far out would be visible as a fish on land.
@@ -333,7 +371,7 @@ export default function CrescentStudy({playing,night,weather}:{playing:boolean;n
       }
       // Never swim through the hull while it is drifting.
       const bdx=st.x-bx,bdz=st.z-bz,bd=Math.hypot(bdx,bdz);
-      if(bd<FISH_BOAT_CLEARANCE){
+      if(playing&&bd<FISH_BOAT_CLEARANCE){
         const k=(FISH_BOAT_CLEARANCE+.004)/Math.max(bd,1e-4);
         st.x=bx+bdx*k;st.z=bz+bdz*k;
         st.heading=Math.atan2(st.z-bz,st.x-bx);
@@ -341,9 +379,10 @@ export default function CrescentStudy({playing,night,weather}:{playing:boolean;n
       // Vertical: stay above the bed and below the surface, damped so it never pops.
       const seabed=field.sample(st.x,st.z);
       const targetY=Math.min(HARBOR.water-.05,Math.max(seabed+.055,HARBOR.water-.13-(i%2)*.03+Math.sin(t*.65+phase)*.012));
-      st.y=st.y===undefined?targetY:THREE.MathUtils.damp(st.y,targetY,8,delta);
+      st.y=st.y===undefined?targetY:THREE.MathUtils.damp(st.y,targetY,8,playing?delta:0);
       fish.position.set(st.x,st.y,st.z);
       fish.rotation.x=st.turn*.10;fish.rotation.z=Math.cos(t*.65+phase)*.035;
+      const effort=THREE.MathUtils.clamp((st.velocity??st.speed)/st.speed,.55,1.9);
       const actor=study.fishActors[i];
       if(playing||!actor.body.userData.posed){
         const positions=actor.body.geometry.attributes.position;
@@ -361,8 +400,15 @@ export default function CrescentStudy({playing,night,weather}:{playing:boolean;n
     const glow=night?.95+.035*Math.sin(t*1.7):pulse*2.6;
     study.lanternLight.intensity=THREE.MathUtils.damp(study.lanternLight.intensity,glow,3,delta);
     study.haloMaterial.opacity=THREE.MathUtils.damp(study.haloMaterial.opacity,night?.34+.025*Math.sin(t*1.7+.6):pulse*.75,3,delta);
-    study.windowMaterial.emissiveIntensity=THREE.MathUtils.damp(study.windowMaterial.emissiveIntensity,night?.95:0,3,delta);
-    study.windowLights.forEach(light=>{light.intensity=THREE.MathUtils.damp(light.intensity,night?.035:0,3,delta);});
+    study.windowMaterials.forEach((material,i)=>{
+      const lit=cottageLightTarget(cottageOverrides.current[i],night);
+      // Manual fades freeze with simulation; automatic weather lighting can
+      // still settle during the existing paused atmosphere transition.
+      const fade=cottageOverrides.current[i]===null||playing&&!document.hidden?delta:0;
+      material.emissiveIntensity=THREE.MathUtils.damp(material.emissiveIntensity,lit?.95:0,5,fade);
+      const light=study.windowLights[i];
+      if(light)light.intensity=THREE.MathUtils.damp(light.intensity,lit?.035:0,5,fade);
+    });
     // Beam sweeps faster while flashing, and is only visible when lit.
     if(playing)study.beacon.rotation.y+=delta*(pulse>0?.95:.24);
     study.setBeamStrength(THREE.MathUtils.damp(study.beamMaterial.uniforms.strength.value,night?1:pulse*.85,3,delta));
@@ -370,6 +416,8 @@ export default function CrescentStudy({playing,night,weather}:{playing:boolean;n
     study.searchLight.intensity=THREE.MathUtils.damp(study.searchLight.intensity,night?3.5:pulse*3.5,3,delta);
     if(import.meta.env.DEV){
       const d=gl.domElement.dataset;d.beaconAngle=String(study.beacon.rotation.y);d.beaconStrength=String(study.beamMaterial.uniforms.strength.value);d.lanternEmissive=String(study.lanternMaterial.emissiveIntensity);d.searchLightIntensity=String(study.searchLight.intensity);
+      d.cottageLights=JSON.stringify(study.windowMaterials.map(m=>m.emissiveIntensity));
+      d.cottageOverrides=JSON.stringify(cottageOverrides.current);
       d.flash=String(flash.current);d.boatMode=boatMode.current;d.boatX=String(bx);d.boatZ=String(bz);d.boatClearance=String(hullClearance(bx,bz,bh,field).toFixed(4));d.fishScared=String(startle.current);
       d.boatTime=String(t);d.fishTime=String(t);d.fishCount='4';d.study='procedural-crescent-v09';d.cameraKind=camera.type;d.cameraZoom=camera instanceof THREE.OrthographicCamera?String(camera.zoom):'perspective';
       d.waterHeight=String(dynamics.probe.height);d.waterSlope=String(dynamics.probe.slopeX);d.waveSteps=String(dynamics.steps);d.waveReads=String(dynamics.reads);d.waveErrors=String(dynamics.readErrors);d.waveImpulses=String(dynamics.impulses);
@@ -385,5 +433,6 @@ export default function CrescentStudy({playing,night,weather}:{playing:boolean;n
     <primitive object={hitProxy} onClick={onClick} onPointerMove={onMove} onPointerOut={onOut}/>
     <HarborWater field={field} footprint={study.footprint} playing={playing} evening={night} rainy={rainy} dynamics={dynamics} deepTint={1} swellAmp={.016} swellDir={SWELL_DIR} onSplash={scare}/>
     <Weather field={field} playing={playing} rainy={rainy}/>
+    <HarborGull playing={playing} trigger={gullTrigger}/>
   </group>;
 }

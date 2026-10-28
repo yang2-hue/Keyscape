@@ -109,6 +109,11 @@ test('extinguished beam is hidden and active beam never draws into override pass
   const override=new THREE.MeshNormalMaterial(),renderer={} as THREE.WebGLRenderer;
   try{
     assert.equal(beam.visible,false);setStrength(1);assert.equal(beam.visible,true);
+    const clickRay=new THREE.Raycaster(new THREE.Vector3(0,0,5),new THREE.Vector3(0,0,-1));
+    assert.equal(clickRay.intersectObject(beam).length,0,'the lit cone must not capture clicks intended for scenery');
+    setStrength(0);
+    assert.equal(clickRay.intersectObject(beam).length,0,'an invisible cone must not capture clicks either');
+    setStrength(1);
     scene.overrideMaterial=override;
     beam.onBeforeRender(renderer,scene,camera,beam.geometry,override,null!);
     assert.equal(beam.geometry.drawRange.count,0,'normal/depth overrides must not see a solid cone');
