@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
-import { useGLTF } from '@react-three/drei';
+import { useGLTF, useTexture } from '@react-three/drei';
 import * as THREE from 'three';
 import { createLunarBase } from './lunar-base';
+import { seeded } from './coastal-materials';
 import { LUNAR_MOMENTS, type LunarMoment, type LunarPreset } from './lunar-weather';
 import { useSoftwareRenderer } from './studio';
 
@@ -84,58 +85,189 @@ export function LunarAtmosphere({ moment }: { moment: LunarMoment }) {
   </>;
 }
 
-/** A starfield on a shell far behind the key. It is geometry, not a background
- * image, so it parallaxes when the viewer orbits. */
+/** A star has to be a point source, and a point source has no size in world
+ * units. `PointsMaterial` with `sizeAttenuation` decides that in the shader by
+ * dividing by view depth — but only for a perspective camera. This study uses an
+ * orthographic lens, where that branch never runs and a star of size 0.028 stays
+ * 0.028 of a pixel: the field was there all along and simply never drew. The
+ * shader below keeps the size in device pixels instead, which is also what a
+ * star should be.
+ *
+ * The shell sits 22–28 units out, well behind the key, so it swings a little
+ * when the visitor orbits without ever competing with the terrain, and 55% of
+ * the field is pulled into a Milky Way band so the sky is not uniform noise. */
 function Stars({ level }: { level: number }) {
   const points = useRef<THREE.Points>(null);
-  const geometry = useMemo(() => {
-    const count = 900, positions = new Float32Array(count * 3), sizes = new Float32Array(count);
+  const gl = useThree(state => state.gl);
+  const camera = useThree(state => state.camera);
+  const field = useMemo(() => {
+    // A 3.9-unit frame sees 1/80 of the sphere, so a few hundred stars would put
+    // four of them on screen. The count is what buys density; the shell sits
+    // close and rides with the camera (a sky has no parallax) so the frame never
+    // runs out of them either.
+    const count = 12000;
+    const positions = new Float32Array(count * 3);
+    const sizes = new Float32Array(count);
+    const phases = new Float32Array(count);
+    const colors = new Float32Array(count * 3);
+    const random = seeded(20261028);
+    const bandNormal = new THREE.Vector3(.34, .74, -.58).normalize();
+    const dir = new THREE.Vector3();
+    const hot = new THREE.Color('#b7c8ff'), white = new THREE.Color('#f4f6fb'), warm = new THREE.Color('#ffdfb4');
+    const tint = new THREE.Color();
     for (let i = 0; i < count; i++) {
-      const u = Math.random() * Math.PI * 2, v = Math.acos(2 * Math.random() - 1), r = 9 + Math.random() * 2.2;
-      positions[i * 3] = Math.sin(v) * Math.cos(u) * r;
-      positions[i * 3 + 1] = Math.cos(v) * r * .55 + 1.2;
-      positions[i * 3 + 2] = Math.sin(v) * Math.sin(u) * r;
-      sizes[i] = .7 + Math.random() * 1.6;
+      const inBand = i < count * .55;
+      // Rejection sampling onto a band around a great circle; the rest is
+      // uniform over the sphere (acos of a uniform variate, not a uniform angle).
+      for (let guard = 0; guard < 40; guard++) {
+        const u = random() * Math.PI * 2, v = Math.acos(2 * random() - 1);
+        dir.set(Math.sin(v) * Math.cos(u), Math.cos(v), Math.sin(v) * Math.sin(u));
+        if (!inBand || Math.abs(dir.dot(bandNormal)) < .16) break;
+      }
+      const radius = 8 + random() * 2.2;
+      positions[i * 3] = dir.x * radius;
+      positions[i * 3 + 1] = dir.y * radius;
+      positions[i * 3 + 2] = dir.z * radius;
+      // Most stars sit near one pixel; a handful of first-magnitude ones carry
+      // the field, and they are what makes it read as a sky.
+      const bright = i % 37 === 0;
+      sizes[i] = bright ? 4.0 + random() * 2.0 : 1.35 + Math.pow(random(), 2.2) * 1.9;
+      phases[i] = random() * Math.PI * 2;
+      const pick = random();
+      tint.copy(pick < .62 ? white : pick < .87 ? hot : warm);
+      if (inBand) tint.multiplyScalar(.8);
+      colors[i * 3] = tint.r; colors[i * 3 + 1] = tint.g; colors[i * 3 + 2] = tint.b;
     }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    g.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
-    return g;
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+    geometry.setAttribute('aPhase', new THREE.BufferAttribute(phases, 1));
+    geometry.setAttribute('aColor', new THREE.BufferAttribute(colors, 3));
+    const uniforms = {
+      uOpacity: { value: 0 },
+      uTime: { value: 0 },
+      uPixelRatio: { value: 1 },
+    };
+    const material = new THREE.ShaderMaterial({
+      uniforms, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
+      vertexShader: `
+        attribute float aSize;
+        attribute float aPhase;
+        attribute vec3 aColor;
+        uniform float uOpacity;
+        uniform float uTime;
+        uniform float uPixelRatio;
+        varying vec3 vColor;
+        varying float vAlpha;
+        void main(){
+          gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);
+          // Two frequencies keep the field from pulsing in unison.
+          float twinkle=.78+.22*sin(uTime*1.15+aPhase*6.2831);
+          gl_PointSize=max(1.0,aSize*uPixelRatio*(.9+.1*twinkle));
+          vColor=aColor;
+          vAlpha=uOpacity*twinkle;
+        }`,
+      fragmentShader: `
+        varying vec3 vColor;
+        varying float vAlpha;
+        void main(){
+          float r=length(gl_PointCoord-.5);
+          if(r>.5)discard;
+          // Squared falloff: a hard dot reads as a dead pixel, a soft one as glow.
+          float core=1.0-smoothstep(0.0,.5,r);
+          gl_FragColor=vec4(vColor,vAlpha*core*core);
+        }`,
+    });
+    return { geometry, material, uniforms };
   }, []);
-  const material = useMemo(() => new THREE.PointsMaterial({ color: '#dfe8f6', size: .028, sizeAttenuation: true, transparent: true, opacity: 0, depthWrite: false, fog: false }), []);
+  const { geometry, material, uniforms } = field;
   useEffect(() => () => { geometry.dispose(); material.dispose(); }, [geometry, material]);
+  useEffect(() => { uniforms.uPixelRatio.value = gl.getPixelRatio(); }, [gl, uniforms]);
   useFrame((_, dt) => {
-    material.opacity = THREE.MathUtils.damp(material.opacity, level * .95, 2.2, Math.min(dt, .05));
-    if (points.current) points.current.rotation.y += dt * .004;
+    const step = Math.min(dt, .05);
+    uniforms.uOpacity.value = THREE.MathUtils.damp(uniforms.uOpacity.value, level, 2.2, step);
+    uniforms.uTime.value += step;
+    uniforms.uPixelRatio.value = gl.getPixelRatio();
+    if (points.current) {
+      // Ride with the camera and never occlude: a star is at infinity, so it must
+      // not slide behind the key or grow when the visitor zooms in.
+      points.current.position.copy(camera.position);
+      points.current.rotation.y += step * .0025;
+    }
+    if (import.meta.env.DEV) gl.domElement.dataset.stars = uniforms.uOpacity.value.toFixed(2);
   });
-  return <points ref={points} geometry={geometry} material={material} frustumCulled={false} />;
+  return <points ref={points} geometry={geometry} material={material} frustumCulled={false} renderOrder={-1000} />;
 }
 
-/** Dust lifted off the regolith during the dusty moment. Cheap points: they
- * drift and fade, and never pretend to be weather the Moon cannot have. */
+/** Dust lifted off the regolith during the dusty moment.
+ *
+ * Same trap as the stars: `sizeAttenuation` does nothing under an orthographic
+ * camera, so a PointsMaterial mote of size 0.012 was a hundredth of a pixel and
+ * the dusty moment had no dust in it at all. These keep a pixel size and drift on
+ * two slow sine fields so the cloud never repeats. */
 function Dust({ level }: { level: number }) {
   const cloud = useRef<THREE.Points>(null);
-  const { geometry, material } = useMemo(() => {
-    const count = 260, positions = new Float32Array(count * 3);
+  const gl = useThree(state => state.gl);
+  const field = useMemo(() => {
+    const count = 460;
+    const positions = new Float32Array(count * 3);
+    const sizes = new Float32Array(count);
+    const phases = new Float32Array(count);
+    const random = seeded(80231);
     for (let i = 0; i < count; i++) {
-      positions[i * 3] = (Math.random() - .5) * 4.4;
-      positions[i * 3 + 1] = Math.random() * .55;
-      positions[i * 3 + 2] = (Math.random() - .5) * 1.7;
+      // Hugging the key, not the whole frame: dust spread across the sky reads as
+      // more stars, which is the one thing it must not look like.
+      positions[i * 3] = (random() - .5) * 4.0;
+      positions[i * 3 + 1] = .015 + Math.pow(random(), 1.9) * .42;
+      positions[i * 3 + 2] = (random() - .5) * 1.5;
+      sizes[i] = 1.6 + random() * 3.4;
+      phases[i] = random() * Math.PI * 2;
     }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    const m = new THREE.PointsMaterial({ color: '#cfc2ac', size: .012, sizeAttenuation: true, transparent: true, opacity: 0, depthWrite: false });
-    return { geometry: g, material: m };
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+    geometry.setAttribute('aPhase', new THREE.BufferAttribute(phases, 1));
+    const uniforms = { uOpacity: { value: 0 }, uTime: { value: 0 }, uPixelRatio: { value: 1 } };
+    const material = new THREE.ShaderMaterial({
+      uniforms, transparent: true, depthWrite: false,
+      vertexShader: `
+        attribute float aSize;
+        attribute float aPhase;
+        uniform float uOpacity;
+        uniform float uTime;
+        uniform float uPixelRatio;
+        varying float vAlpha;
+        void main(){
+          vec3 p=position;
+          // Dust does not fall: it hangs and drifts.
+          p.x+=sin(uTime*.21+aPhase)*.06;
+          p.y+=sin(uTime*.37+aPhase*1.7)*.03;
+          p.z+=cos(uTime*.17+aPhase*.7)*.04;
+          gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.0);
+          gl_PointSize=max(1.0,aSize*uPixelRatio);
+          vAlpha=uOpacity*(.45+.55*sin(uTime*.9+aPhase)*.5+.5);
+        }`,
+      fragmentShader: `
+        varying float vAlpha;
+        void main(){
+          float r=length(gl_PointCoord-.5);
+          if(r>.5)discard;
+          float soft=1.0-smoothstep(0.0,.5,r);
+          gl_FragColor=vec4(vec3(.78,.71,.60),vAlpha*soft*soft*.42);
+        }`,
+    });
+    return { geometry, material, uniforms };
   }, []);
+  const { geometry, material, uniforms } = field;
   useEffect(() => () => { geometry.dispose(); material.dispose(); }, [geometry, material]);
-  useFrame((state, dt) => {
-    material.opacity = THREE.MathUtils.damp(material.opacity, level * .55, 2, Math.min(dt, .05));
-    if (cloud.current) {
-      cloud.current.position.x = Math.sin(state.clock.elapsedTime * .12) * .12;
-      cloud.current.position.y = Math.sin(state.clock.elapsedTime * .3) * .012;
-    }
+  useFrame((_, dt) => {
+    const step = Math.min(dt, .05);
+    uniforms.uOpacity.value = THREE.MathUtils.damp(uniforms.uOpacity.value, level, 2, step);
+    uniforms.uTime.value += step;
+    uniforms.uPixelRatio.value = gl.getPixelRatio();
+    if (import.meta.env.DEV) gl.domElement.dataset.dust = uniforms.uOpacity.value.toFixed(2);
   });
-  return <points ref={cloud} geometry={geometry} material={material} />;
+  return <points ref={cloud} geometry={geometry} material={material} frustumCulled={false} />;
 }
 
 /** Open/closed airlock, warm interior, sun-tracking panels and a plant canopy
@@ -147,7 +279,18 @@ export default function LunarStudy({ playing, moment }: { playing: boolean; mome
   const software = useSoftwareRenderer();
   const time = useMemo(() => ({ value: 0 }), []);
   const habitat = useGLTF(`${import.meta.env.BASE_URL}models/lunar/lunar-habitat.glb`);
-  const base = useMemo(() => createLunarBase(time, software ? 'software' : 'full', { habitat: habitat.scene }), [time, software, habitat.scene]);
+  // Baked regolith maps: albedo, tangent normal and roughness, all from the same
+  // height field (scripts/blender/bake-lunar-regolith.py).
+  const regolith = useTexture({
+    albedo: `${import.meta.env.BASE_URL}textures/lunar/regolith-albedo.png`,
+    normal: `${import.meta.env.BASE_URL}textures/lunar/regolith-normal.png`,
+    rough: `${import.meta.env.BASE_URL}textures/lunar/regolith-rough.png`,
+  });
+  const crops = useGLTF(`${import.meta.env.BASE_URL}models/lunar/lunar-crops.glb`);
+  const base = useMemo(
+    () => createLunarBase(time, software ? 'software' : 'full', { habitat: habitat.scene, regolith, crops: crops.scene }),
+    [time, software, habitat.scene, regolith, crops.scene],
+  );
 
   const preset: LunarPreset = LUNAR_MOMENTS.find(item => item.id === moment) ?? LUNAR_MOMENTS[0];
   const open = useRef(0);
@@ -196,6 +339,20 @@ export default function LunarStudy({ playing, moment }: { playing: boolean; mome
           if (node) { node.getWorldPosition(p); out[name] = project(p.x, p.y + dy, p.z); }
         }
         return out;
+      },
+      /** What the terrain material actually ended up with, so a missing map or a
+       * silently ignored normal cannot be mistaken for "the art is flat". */
+      ground() {
+        const terrain = base.root.getObjectByName('LunarTerrain') as THREE.Mesh | null;
+        const material = terrain?.material as THREE.MeshStandardMaterial | undefined;
+        return material ? {
+          map: !!material.map,
+          normalMap: !!material.normalMap,
+          roughnessMap: !!material.roughnessMap,
+          normalScale: Number(material.normalScale?.x ?? 0),
+          repeat: material.map ? [material.map.repeat.x, material.map.repeat.y] : null,
+          color: `#${material.color.getHexString()}`,
+        } : null;
       },
       state() {
         return {

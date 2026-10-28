@@ -68,3 +68,36 @@ test('the regolith stays inside a thin slab everywhere on the key', () => {
   // A crater rim is allowed to stand above the surrounding ground.
   assert.ok(highest < 0.16, `terrain piles up past the rim at ${highest.toFixed(3)}`);
 });
+
+test('the open regolith has grain, so it is not a polished plane', () => {
+  // Two centimetres apart on open ground: the surface must actually move. A
+  // perfectly smooth plane is what made the first version read as clay, and the
+  // texture maps alone cannot break a silhouette.
+  let total = 0, samples = 0;
+  for (let x = -1.6; x < 1.6; x += 0.07) {
+    for (let z = -0.6; z < 0.6; z += 0.07) {
+      const awayFromBuild = Math.abs(z) > 0.42 || x < -1.1 || x > 1.5;
+      if (!awayFromBuild) continue;
+      total += Math.abs(lunarHeight(x + 0.02, z) - lunarHeight(x, z));
+      samples++;
+    }
+  }
+  const mean = total / samples;
+  assert.ok(mean > 0.0004, `open ground barely moves (mean ${mean.toFixed(5)} over 2 cm)`);
+});
+
+test('grain is suppressed under the modules so nothing intrudes on the pad', () => {
+  // The step from the pad to the first grain ridge would be a crack in the
+  // doorstep; the flattening mask has to win everywhere the builds sit.
+  for (const site of [SITE.habitat, SITE.airlock, SITE.greenhouse]) {
+    for (let dx = -0.1; dx <= 0.1; dx += 0.05) {
+      for (let dz = -0.06; dz <= 0.06; dz += 0.06) {
+        const h = lunarHeight(site.x + dx, site.z + dz);
+        assert.ok(Math.abs(h - LUNAR.pad) < 0.012, `(${(site.x + dx).toFixed(2)}, ${(site.z + dz).toFixed(2)}) sits at ${h.toFixed(3)}`);
+      }
+    }
+  }
+  // The solar array stands on the open regolith, so it is the one build that
+  // must follow the terrain instead of the pad.
+  assert.ok(Math.abs(lunarHeight(SITE.solar.x, SITE.solar.z) - LUNAR.pad) > 0.005, 'the solar site should sit on open ground, not on the flattened pad');
+});

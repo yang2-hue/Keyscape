@@ -67,20 +67,53 @@ function normalFrom(image: ImageData, n: number, strength: number) {
   return texture;
 }
 
+/** Baked regolith maps out of Blender (scripts/blender/bake-lunar-regolith.py).
+ * They replace the canvas noise below whenever they are available: a 1024 tile
+ * carries gravel and impact pits at a size the eye can actually resolve, which
+ * 256 px of per-pixel noise never did — it averaged out to flat clay the moment
+ * the surface was more than a metre away on screen. */
+export type RegolithMaps = { albedo: THREE.Texture; normal: THREE.Texture; rough: THREE.Texture };
+
 /** Greys read as "3D clay" without a cool highlight; every surface here leans
  * very slightly warm so the sun can stay neutral white. */
-export function makeLunarMaterials(quality: 'full' | 'software' = 'full') {
+export function makeLunarMaterials(quality: 'full' | 'software' = 'full', baked?: RegolithMaps) {
   const dust = regolithSurface('dust'), hull = regolithSurface('hull');
   dust.map.repeat.set(4, 2); dust.normal.repeat.set(4, 2);
   hull.map.repeat.set(8, 2); hull.normal.repeat.set(8, 2);
+
+  // The plane's UV runs once across 3.64 x 1.44 units, so 2.5 x 1 repeats give
+  // near-square tiles of 1.45 units. The baked tile is periodic, so no seam.
+  const detail = baked ? (() => {
+    const map = baked.albedo.clone();
+    map.colorSpace = THREE.SRGBColorSpace;
+    map.wrapS = map.wrapT = THREE.RepeatWrapping;
+    map.repeat.set(3.4, 1.36);
+    map.anisotropy = 8;
+    const normal = baked.normal.clone();
+    normal.colorSpace = THREE.NoColorSpace;
+    normal.wrapS = normal.wrapT = THREE.RepeatWrapping;
+    normal.repeat.set(3.4, 1.36);
+    normal.anisotropy = 8;
+    const rough = baked.rough.clone();
+    rough.colorSpace = THREE.NoColorSpace;
+    rough.wrapS = rough.wrapT = THREE.RepeatWrapping;
+    rough.repeat.set(3.4, 1.36);
+    return { map, normal, rough };
+  })() : null;
 
   const standard = (color: string, roughness = .92, extra: THREE.MeshStandardMaterialParameters = {}) =>
     new THREE.MeshStandardMaterial({ color, roughness, metalness: 0, ...extra });
 
   const materials = {
-    regolith: standard('#807d78', .97, { map: dust.map, normalMap: dust.normal, normalScale: new THREE.Vector2(1.6, 1.6) }),
-    regolithDark: standard('#7e7b76', .98, { map: dust.map, normalMap: dust.normal, normalScale: new THREE.Vector2(.8, .8) }),
-    boulder: standard('#928f8a', .96, { map: dust.map, normalMap: dust.normal, normalScale: new THREE.Vector2(1.1, 1.1) }),
+    // Colour in the baked map, tint in the material, macro variation in vertex
+    // colours. Keeping the three jobs apart is what stops the surface reading as
+    // a photograph of dirt pasted onto a slab.
+    regolith: detail
+      ? standard('#b9babb', 1, { map: detail.map, normalMap: detail.normal, normalScale: new THREE.Vector2(2.2, 2.2), roughnessMap: detail.rough })
+      : standard('#807d78', .97, { map: dust.map, normalMap: dust.normal, normalScale: new THREE.Vector2(1.6, 1.6) }),
+    boulder: detail
+      ? standard('#ffffff', 1, { map: detail.map, normalMap: detail.normal, normalScale: new THREE.Vector2(1.1, 1.1), roughnessMap: detail.rough })
+      : standard('#928f8a', .96, { map: dust.map, normalMap: dust.normal, normalScale: new THREE.Vector2(1.1, 1.1) }),
     hull: standard('#efece3', .74, { map: hull.map, normalMap: hull.normal, normalScale: new THREE.Vector2(.5, .5) }),
     hullWarm: standard('#ded6c6', .78, { map: hull.map }),
     trim: standard('#c9c3b6', .6, { metalness: .15 }),
@@ -95,12 +128,14 @@ export function makeLunarMaterials(quality: 'full' | 'software' = 'full') {
     leafB: standard('#5d7a45', .9, { side: THREE.DoubleSide }),
     leafC: standard('#3f5a33', .92, { side: THREE.DoubleSide }),
     soil: standard('#4b4136', .98),
+    // Single sided on purpose: a double-sided transparent vault is two sheets of
+    // glass stacked in the same pixels, and the crops behind it turn to soup.
     glass: quality === 'full'
-      ? new THREE.MeshPhysicalMaterial({ color: '#cfe3e6', roughness: .06, metalness: 0, transmission: .82, thickness: .03, ior: 1.42, transparent: true, opacity: .5, side: THREE.DoubleSide })
-      : new THREE.MeshStandardMaterial({ color: '#cfe3e6', roughness: .1, metalness: .1, transparent: true, opacity: .26, side: THREE.DoubleSide }),
+      ? new THREE.MeshPhysicalMaterial({ color: '#dcecee', roughness: .04, metalness: 0, transmission: .9, thickness: .02, ior: 1.45, transparent: true, opacity: .38, side: THREE.FrontSide, depthWrite: false })
+      : new THREE.MeshStandardMaterial({ color: '#e2f0f1', roughness: .05, metalness: 0, transparent: true, opacity: .14, side: THREE.FrontSide, depthWrite: false }),
     glassRoof: quality === 'full'
-      ? new THREE.MeshPhysicalMaterial({ color: '#d8e6e6', roughness: .12, transmission: .7, thickness: .02, transparent: true, opacity: .42, side: THREE.DoubleSide })
-      : new THREE.MeshStandardMaterial({ color: '#d8e6e6', roughness: .15, transparent: true, opacity: .2, side: THREE.DoubleSide }),
+      ? new THREE.MeshPhysicalMaterial({ color: '#e2eeee', roughness: .1, transmission: .8, thickness: .02, transparent: true, opacity: .3, side: THREE.FrontSide, depthWrite: false })
+      : new THREE.MeshStandardMaterial({ color: '#e6f1f1', roughness: .1, transparent: true, opacity: .12, side: THREE.FrontSide, depthWrite: false }),
   };
 
   return {
@@ -108,6 +143,7 @@ export function makeLunarMaterials(quality: 'full' | 'software' = 'full') {
     dispose() {
       Object.values(materials).forEach(m => m.dispose());
       dust.map.dispose(); dust.normal.dispose(); hull.map.dispose(); hull.normal.dispose();
+      detail?.map.dispose(); detail?.normal.dispose(); detail?.rough.dispose();
     },
   };
 }

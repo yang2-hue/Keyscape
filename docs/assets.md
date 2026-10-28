@@ -37,3 +37,21 @@ blender --background --factory-startup --python-exit-code 1 --python scripts/ble
 坐标：舱体轴向为 X，原点在舱体中心（含舱门与东侧对接环，包围盒 x −0.409…0.253、y ±0.229、z −0.188…0.351）。导出 Y-up，浏览器里直接按 `SITE.habitat` 摆放，`y = pad + radius`。窗片材质名固定为 `HabitatWindowGlow`，室内灯驱动它。
 
 中间产物 `outputs/art-lunar/` 不入库。
+
+## 月面作物（2026-10-28）
+
+`scripts/blender/author-lunar-crops.py` 生成 `public/models/lunar/lunar-crops.glb`：三种作物（叶球 `CropLeafy`、高秆 `CropStalk`、香草 `CropHerb`），每种由 `_Leaf` 与 `_Stem` 两个物体组成（香草无茎）。叶片是真实几何：4 列 × 7 段、V 形横截面、沿长度下垂。1,998 三角面，52 KB，两份材质 `CropLeaf` / `CropStem`（双面）。
+
+坐标：母株高 1.0，基部在原点，Y-up 导出；场景按目标高度除以母株高度得到缩放，再按行实例化。
+
+## 月壤贴图（2026-10-28）
+
+`scripts/blender/bake-lunar-regolith.py` 生成 `public/textures/lunar/` 三张 1024² 可无缝平铺的贴图：
+
+| 文件 | 用途 | 色彩空间 |
+| --- | --- | --- |
+| `regolith-albedo.png` | 基础色与极低幅度斑驳 | sRGB（脚本内已编码，文件按 Non-Color 落盘） |
+| `regolith-normal.png` | 高度场中心差分的切线空间法线 | Non-Color |
+| `regolith-rough.png` | 灰度粗糙度 0.80–1.0 | Non-Color |
+
+高度场由 numpy 生成（fBm + 分级砾石 + 微型撞击坑 + 尘塘），所有 octave 周期整除 1024，因此平铺无接缝。改参数后重跑脚本即可，不需要 Blender 场景文件。

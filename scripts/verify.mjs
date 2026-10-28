@@ -374,6 +374,13 @@ try {
   check('the lunar moment is named on the transport', /月球/.test(lunar.label), lunar.label);
   await page.screenshot({ path: path.join(OUT, 'space-dawn.png') });
 
+  // The regolith is the whole point of this pass: no maps, no soil.
+  const ground = await page.evaluate(() => window.__lunarLandmarks.ground());
+  check('the regolith carries baked albedo, normal and roughness maps',
+    !!(ground?.map && ground?.normalMap && ground?.roughnessMap), ground);
+  check('the regolith tile repeats across the key instead of stretching once',
+    (ground?.repeat?.[0] ?? 0) > 2, ground?.repeat);
+
   const anchors = await page.evaluate(() => window.__lunarLandmarks.screen());
   const state = () => page.evaluate(() => window.__lunarLandmarks.state());
   await page.mouse.click(...anchors.LunarAirlock);
@@ -397,7 +404,16 @@ try {
   const nightCheck = await page.waitForFunction(() => document.querySelector('canvas')?.dataset.moment === 'night', null, { timeout: 60000 }).then(() => true).catch(() => false);
   const nightLamp = await page.evaluate(() => Number(document.querySelector('canvas')?.dataset.lunarLamp));
   check('the lunar night lights the interior', nightCheck && nightLamp > 0.5, { nightCheck, nightLamp });
+  // The starfield has to actually reach the screen; it used to be drawn at a
+  // hundredth of a pixel because of the orthographic camera.
+  const starsIn = await page.waitForFunction(() => Number(document.querySelector('canvas')?.dataset.stars) > 0.8, null, { timeout: 240000 }).then(() => true).catch(() => false);
+  check('the starfield fades in with the lunar night', starsIn, await page.evaluate(() => document.querySelector('canvas')?.dataset.stars));
   await page.screenshot({ path: path.join(OUT, 'space-night.png') });
+
+  await page.evaluate(() => window.__galleryCycle.set(2));
+  const dustIn = await page.waitForFunction(() => Number(document.querySelector('canvas')?.dataset.dust) > 0.5, null, { timeout: 240000 }).then(() => true).catch(() => false);
+  check('the dusty moment puts dust in the air', dustIn, await page.evaluate(() => document.querySelector('canvas')?.dataset.dust));
+  await page.screenshot({ path: path.join(OUT, 'space-dust.png') });
 
   await page.getByRole('button', { name: 'C / COASTAL' }).click();
   const backHome = await page.waitForFunction(() => document.querySelector('main')?.dataset.world === 'coastal', null, { timeout: 30000 }).then(() => true).catch(() => false);

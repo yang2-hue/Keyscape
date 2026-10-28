@@ -60,6 +60,32 @@ export function spacebarOutline() {
   return points;
 }
 
+const hash2 = (i: number, j: number) => {
+  const n = Math.sin(i * 127.1 + j * 311.7) * 43758.5453;
+  return n - Math.floor(n);
+};
+
+/** Gradient noise, not value noise.
+ *
+ * Value noise interpolates the lattice *values*, so its iso-lines follow the
+ * lattice and every octave leaves a faint checkerboard. On a large flat surface
+ * under a directional light that reads as diagonal corduroy — visible in the
+ * renders no matter how small the amplitude. Gradient noise only uses the
+ * lattice for directions, so it has no preferred axis. */
+export function noise2(x: number, z: number) {
+  const i = Math.floor(x), j = Math.floor(z);
+  const fx = x - i, fz = z - j;
+  const u = fx * fx * fx * (fx * (fx * 6 - 15) + 10);
+  const v = fz * fz * fz * (fz * (fz * 6 - 15) + 10);
+  const grad = (ix: number, iz: number, dx: number, dz: number) => {
+    const a = hash2(ix, iz) * Math.PI * 2;
+    return Math.cos(a) * dx + Math.sin(a) * dz;
+  };
+  const n00 = grad(i, j, fx, fz), n10 = grad(i + 1, j, fx - 1, fz);
+  const n01 = grad(i, j + 1, fx, fz - 1), n11 = grad(i + 1, j + 1, fx - 1, fz - 1);
+  return (n00 * (1 - u) + n10 * u) * (1 - v) + (n01 * (1 - u) + n11 * u) * v;
+}
+
 /** Terrain: a shallow regolith bed, one hero crater at the west end, a small
  * secondary crater at the east end, and a flat pad under the modules. */
 export function lunarHeight(x: number, z: number) {
@@ -80,5 +106,16 @@ export function lunarHeight(x: number, z: number) {
   // Flatten the build pad; the transition is wide so no crease appears.
   const padMask = (1 - smooth(Math.abs(x - 0.42), 1.02, 1.34)) * (1 - smooth(Math.abs(z), 0.5, 0.66));
   h = h * (1 - padMask) + LUNAR.pad * padMask;
+  // Grain: two octaves of noise on the open ground only. The pad has to stay
+  // flat — a bump under a doorstep reads as a modelling error, not as dust.
+  // Sheared domains per octave: sampling the same lattice twice on the same axes
+  // leaves visible diagonal banding, which is what value noise is famous for.
+  // Three octaves, each on its own sheared domain: the mesh is 0.0096 units per
+  // cell, so 34 is the highest frequency that still resolves (about 3 cells).
+  const grain =
+    noise2(x * 7.5 + z * 2.1, z * 7.5 - x * 1.9) * .010 +
+    noise2(x * 17 - z * 4.3, z * 17 + x * 3.9) * .0055 +
+    noise2(x * 34 + z * 7.7, z * 34 - x * 6.1) * .0024;
+  h += grain * (1 - padMask);
   return h;
 }

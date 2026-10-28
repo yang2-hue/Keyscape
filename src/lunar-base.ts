@@ -1,13 +1,16 @@
 import * as THREE from 'three';
-import { LUNAR, SITE, lunarHeight, roundedRectPoint, spacebarOutline } from './lunar-layout';
-import { makeLunarMaterials, type LunarMaterials } from './lunar-materials';
+import { LUNAR, SITE, lunarHeight, noise2, roundedRectPoint, spacebarOutline } from './lunar-layout';
+import { makeLunarMaterials, type LunarMaterials, type RegolithMaps } from './lunar-materials';
 import { seeded } from './coastal-materials';
 
 type Quality = 'full' | 'software';
 
+// Vertex colours are a multiplier on the baked albedo, not a colour in their own
+// right: near-white keeps the map's own tone and only adds the macro mottling
+// that a 1.45-unit tile cannot carry.
 const VARIANTS = {
-  regolith: ['#adaba6', '#a4a19c', '#b6b3ad', '#9b9893'],
-  boulder: ['#a3a09a', '#94918c', '#b0ada7', '#8a8782'],
+  regolith: ['#fffdf9', '#f3efe7', '#ffffff', '#eae5db'],
+  boulder: ['#cfccc6', '#c1beb8', '#dcd9d3', '#b3b0aa'],
 };
 
 /** Open half-cylinder swept along X: the greenhouse shell and its glazing. */
@@ -110,11 +113,11 @@ export type LunarBase = {
   dispose: () => void;
 };
 
-export function createLunarBase(time: { value: number }, quality: Quality = 'full', assets: { habitat?: THREE.Object3D } = {}): LunarBase {
+export function createLunarBase(time: { value: number }, quality: Quality = 'full', assets: { habitat?: THREE.Object3D; regolith?: RegolithMaps; crops?: THREE.Object3D } = {}): LunarBase {
   const root = new THREE.Group();
   root.name = 'LunarGreenhouse';
   root.rotation.y = LUNAR.rotation;
-  const own = makeLunarMaterials(quality);
+  const own = makeLunarMaterials(quality, assets.regolith);
   const m = own.materials;
   const geometries: THREE.BufferGeometry[] = [];
   const random = seeded(20261028);
@@ -162,7 +165,7 @@ export function createLunarBase(time: { value: number }, quality: Quality = 'ful
   root.add(bottom);
 
   // ---- terrain ----------------------------------------------------------
-  const segX = quality === 'full' ? 300 : 170, segZ = quality === 'full' ? 120 : 70;
+  const segX = quality === 'full' ? 380 : 190, segZ = quality === 'full' ? 150 : 76;
   const plane = new THREE.PlaneGeometry(LUNAR.halfWidth * 2, LUNAR.halfDepth * 2, segX, segZ);
   plane.rotateX(-Math.PI / 2);
   const position = plane.attributes.position;
@@ -175,7 +178,12 @@ export function createLunarBase(time: { value: number }, quality: Quality = 'ful
     const h = lunarHeight(x, z);
     position.setXYZ(i, x, h, z);
     // Crater floors and steep rims darken slightly; regolith also mottles.
-    const shade = .96 + .05 * Math.sin(x * 21 + z * 17) - craterDepth(h) * 2.6;
+    // Macro mottling: the tile cannot carry variation at this scale without
+    // repeating, so the broad patches live in the vertex colours.
+    const shade = .98 + .02 * Math.sin(x * 21 + z * 17)
+      + .035 * (noise2(x * 2.6 + 4.2, z * 2.6 - 1.7) - .5)
+      + .025 * (noise2(x * 5.9 - 2.3, z * 5.9 + 3.1) - .5)
+      - craterDepth(h) * 2.2;
     const base = palette[i % palette.length];
     const c = base.clone().multiplyScalar(Math.max(.46, Math.min(1.02, shade)));
     colors.push(c.r, c.g, c.b);
@@ -184,19 +192,22 @@ export function createLunarBase(time: { value: number }, quality: Quality = 'ful
   plane.computeVertexNormals();
   const regolithMaterial = m.regolith.clone();
   regolithMaterial.vertexColors = true;
-  regolithMaterial.color.set('#ffffff');
   const terrain = mesh(plane, regolithMaterial, 'LunarTerrain');
   terrain.receiveShadow = true; terrain.castShadow = false;
   root.add(terrain);
 
   // ---- scattered rock ---------------------------------------------------
-  const boulderGeometry = new THREE.IcosahedronGeometry(1, 2);
+  // An icosahedron is non-indexed, so `computeVertexNormals` gives every face
+  // its own normal and a displaced one reads as crumpled paper. A UV sphere is
+  // indexed: the same displacement now shades as one weathered rock.
+  const boulderGeometry = new THREE.SphereGeometry(1, 26, 16);
   const boulderPositions = boulderGeometry.attributes.position;
   for (let i = 0; i < boulderPositions.count; i++) {
     const v = new THREE.Vector3().fromBufferAttribute(boulderPositions, i);
-    const n = 1 + .22 * Math.sin(v.x * 5.3 + v.z * 4.1) + .14 * Math.sin(v.y * 7.7);
+    const n = 1 + .26 * Math.sin(v.x * 3.7 + v.z * 2.9) + .15 * Math.sin(v.y * 5.1 + v.x * 2.2)
+      + .09 * Math.sin(v.z * 7.3 - v.y * 1.7);
     v.multiplyScalar(n);
-    boulderPositions.setXYZ(i, v.x, v.y * .72, v.z);
+    boulderPositions.setXYZ(i, v.x, v.y * .74, v.z);
   }
   boulderGeometry.computeVertexNormals();
   track(boulderGeometry);
@@ -240,24 +251,48 @@ export function createLunarBase(time: { value: number }, quality: Quality = 'ful
   });
   root.add(boulders);
 
-  // Pebbles: the crater rims and the open regolith are covered in them at this
-  // scale, and they are the cheapest way to stop the surface looking like clay.
-  const pebbleSpots: { x: number; z: number; s: number }[] = [];
-  for (let i = 0; i < 320; i++) {
-    const x = (random() - .5) * 3.5, z = (random() - .5) * 1.32;
-    if (Math.abs(z) < .34 && x > -.95 && x < 1.35) continue;
-    pebbleSpots.push({ x, z, s: .006 + random() * .016 });
+  // Pebbles. The reference surface is not dust with a few stones on it: it is a
+  // dense field of small rubble, and that field is what the eye reads as "soil".
+  // Shading alone cannot do it — a normal map has no silhouette and no contact
+  // shadow. Instanced, so ~5 000 stones cost one draw call.
+  const pebbleGeometry = new THREE.SphereGeometry(1, 9, 7);
+  const pebblePositions = pebbleGeometry.attributes.position;
+  for (let i = 0; i < pebblePositions.count; i++) {
+    const v = new THREE.Vector3().fromBufferAttribute(pebblePositions, i);
+    v.multiplyScalar(1 + .18 * Math.sin(v.x * 6.1 + v.z * 4.7) + .1 * Math.sin(v.y * 8.3));
+    pebblePositions.setXYZ(i, v.x, v.y * .78, v.z);
   }
-  const pebbles = new THREE.InstancedMesh(boulderGeometry, boulderMaterial, pebbleSpots.length);
+  pebbleGeometry.computeVertexNormals();
+  track(pebbleGeometry);
+
+  const pebbleSpots: { x: number; z: number; s: number; flat: number }[] = [];
+  const clearOfBuild = (x: number, z: number) => !(Math.abs(z) < .31 && x > -1.02 && x < 1.42);
+  for (let i = 0; i < 5200; i++) {
+    const x = (random() - .5) * 3.54, z = (random() - .5) * 1.36;
+    if (!clearOfBuild(x, z)) continue;
+    // Strongly biased to the small end: a field of equal stones is a pattern.
+    pebbleSpots.push({ x, z, s: .0022 + Math.pow(random(), 2.6) * .009, flat: .45 + random() * .4 });
+  }
+  // Compacted clods: flattened lumps an order of magnitude larger, the "dirt"
+  // between the stones.
+  for (let i = 0; i < 320; i++) {
+    const x = (random() - .5) * 3.5, z = (random() - .5) * 1.36;
+    if (!clearOfBuild(x, z)) continue;
+    pebbleSpots.push({ x, z, s: .012 + random() * .022, flat: .22 + random() * .18 });
+  }
+  const pebbles = new THREE.InstancedMesh(pebbleGeometry, boulderMaterial, pebbleSpots.length);
   pebbles.name = 'LunarPebbles';
   pebbles.castShadow = true; pebbles.receiveShadow = true;
   pebbleSpots.forEach((spot, i) => {
-    pos.set(spot.x, lunarHeight(spot.x, spot.z) + spot.s * .3, spot.z);
-    quaternion.setFromEuler(new THREE.Euler(random() * .8, random() * Math.PI * 2, random() * .6));
-    scale.set(spot.s, spot.s * (.5 + random() * .4), spot.s * (.8 + random() * .4));
+    // Sink most of the stone: a sphere resting on the surface reads as a marble,
+    // a sphere half buried reads as a clast in dust.
+    pos.set(spot.x, lunarHeight(spot.x, spot.z) + spot.s * spot.flat * .35, spot.z);
+    quaternion.setFromEuler(new THREE.Euler((random() - .5) * .5, random() * Math.PI * 2, (random() - .5) * .5));
+    scale.set(spot.s, spot.s * spot.flat, spot.s * (.8 + random() * .4));
     matrix.compose(pos, quaternion, scale);
     pebbles.setMatrixAt(i, matrix);
-    pebbles.setColorAt(i, color.set(VARIANTS.boulder[i % VARIANTS.boulder.length]));
+    // Slightly darker than the placed boulders: they sit in the dust, not on it.
+    pebbles.setColorAt(i, color.set(VARIANTS.boulder[i % VARIANTS.boulder.length]).multiplyScalar(.78 + random() * .16));
   });
   root.add(pebbles);
 
@@ -372,6 +407,30 @@ export function createLunarBase(time: { value: number }, quality: Quality = 'ful
   const plants = new THREE.Group();
   plants.name = 'LunarPlants';
   const leafMaterials = [m.leafA, m.leafB, m.leafC];
+
+  // Crops authored in Blender (scripts/blender/author-lunar-crops.py): a lettuce
+  // rosette, a staked vine and a herb tuft, each as a leaf part plus a stem part.
+  // Instancing keeps ~80 plants inside six draw calls; the previous version
+  // spawned one Mesh per plant and one blade-cluster geometry for all of them,
+  // which is why every bed looked like the same grass.
+  const cropSource = (name: string) => {
+    const source = assets.crops?.getObjectByName(name) as THREE.Mesh | undefined;
+    return source ? { geometry: source.geometry as THREE.BufferGeometry, material: source.material as THREE.Material } : null;
+  };
+  const CROP_HEIGHT = { Leafy: .42, Stalk: .78, Herb: .44 } as const;
+  type CropKind = keyof typeof CROP_HEIGHT;
+  const cropPalette = ['#ffffff', '#e6f0d8', '#d2e2c2', '#f2f7e8'];
+  const placed: { kind: CropKind; matrix: THREE.Matrix4; tint: number }[] = [];
+  const place = (kind: CropKind, x: number, y: number, z: number, height: number) => {
+    const size = height / CROP_HEIGHT[kind] * (.92 + random() * .16);
+    matrix.compose(
+      pos.set(x, y, z),
+      quaternion.setFromEuler(new THREE.Euler(0, random() * Math.PI * 2, 0)),
+      scale.set(size * (.92 + random() * .16), size, size * (.92 + random() * .16)),
+    );
+    placed.push({ kind, matrix: matrix.clone(), tint: Math.floor(random() * cropPalette.length) });
+  };
+
   for (const side of [-1, 1]) {
     const bed = mesh(new THREE.BoxGeometry(gh.length - .08, .042, .1), m.bed);
     bed.position.set(0, gh.plinth + .021, side * .105);
@@ -379,21 +438,21 @@ export function createLunarBase(time: { value: number }, quality: Quality = 'ful
     const soil = mesh(new THREE.BoxGeometry(gh.length - .1, .01, .082), m.soil);
     soil.position.set(0, gh.plinth + .042, side * .105);
     beds.add(soil);
-    // Two heights of planting: a low crop and a taller row that reaches up the
-    // glazing, which is what makes a greenhouse read as one.
-    const rows = [{ count: 34, size: [.032, .05], y: .046 }, { count: 14, size: [.05, .075], y: .046, tall: true }];
-    for (const row of rows) for (let i = 0; i < row.count; i++) {
-      const step = (gh.length - .12) / row.count;
-      const x = -(gh.length - .12) / 2 + step * (i + .5) + (row.tall ? step * .4 : 0);
-      const plant = new THREE.Mesh(plantGeo, leafMaterials[(i + (side > 0 ? 1 : 0) + (i % 2)) % 3]);
-      const s0 = row.size[0] + random() * (row.size[1] - row.size[0]);
-      plant.scale.set(s0, s0 * (row.tall ? 2.4 : .8 + random() * .8), s0);
-      plant.position.set(x + (random() - .5) * .012, gh.plinth + row.y, side * .105 + (random() - .5) * .028);
-      plant.rotation.y = random() * Math.PI * 2;
-      plant.castShadow = true;
-      plants.add(plant);
+    // Two crops per bed: a low row that reads as produce, and a staked row that
+    // reaches up the glazing, which is what makes a greenhouse read as one.
+    for (let i = 0; i < 24; i++) {
+      const step = (gh.length - .14) / 24;
+      const x = -(gh.length - .14) / 2 + step * (i + .5);
+      const kind: CropKind = i % 3 === 2 ? 'Herb' : 'Leafy';
+      place(kind, x + (random() - .5) * .01, gh.plinth + .044, side * .105 + (random() - .5) * .03,
+        kind === 'Herb' ? .058 : .052);
     }
-    // Trellis wires the tall row climbs on.
+    for (let i = 0; i < 9; i++) {
+      const step = (gh.length - .2) / 9;
+      const x = -(gh.length - .2) / 2 + step * (i + .5);
+      place('Stalk', x + (random() - .5) * .014, gh.plinth + .044, side * .105 + (random() - .5) * .026, .105);
+    }
+    // Trellis wires the staked row climbs on.
     for (const h of [.09, .14]) {
       const wire = mesh(new THREE.BoxGeometry(gh.length - .14, .0022, .0022), m.metal);
       wire.position.set(0, gh.plinth + h, side * .105);
@@ -402,12 +461,31 @@ export function createLunarBase(time: { value: number }, quality: Quality = 'ful
     // One grow bar per bed. Its material is animated with the interior level, so
     // it is a clone we keep a handle on.
     const barMaterial = m.lamp.clone();
-    barMaterial.emissiveIntensity = .3;
-    const bar = mesh(new THREE.BoxGeometry(gh.length - .16, .006, .01), barMaterial);
-    bar.position.set(0, gh.plinth + gh.radius - .05, side * .07);
+    barMaterial.emissiveIntensity = .22;
+    const bar = mesh(new THREE.BoxGeometry(gh.length - .16, .0035, .007), barMaterial);
+    bar.position.set(0, gh.plinth + gh.radius * .58, side * .06);
     beds.add(bar);
     growBarMaterials.push(barMaterial);
   }
+
+  for (const kind of Object.keys(CROP_HEIGHT) as CropKind[]) {
+    const items = placed.filter(item => item.kind === kind);
+    if (!items.length) continue;
+    for (const suffix of ['Leaf', 'Stem']) {
+      const part = cropSource(`Crop${kind}_${suffix}`);
+      if (!part) continue;
+      const instanced = new THREE.InstancedMesh(part.geometry, part.material, items.length);
+      instanced.name = `LunarCrop${kind}${suffix}`;
+      instanced.castShadow = true;
+      instanced.receiveShadow = true;
+      items.forEach((item, i) => {
+        instanced.setMatrixAt(i, item.matrix);
+        instanced.setColorAt(i, color.set(cropPalette[item.tint]));
+      });
+      plants.add(instanced);
+    }
+  }
+
   // Hanging vines break the ridge line.
   for (let i = 0; i < 7; i++) {
     const x = -(gh.length - .2) / 2 + random() * (gh.length - .2);
@@ -438,7 +516,9 @@ export function createLunarBase(time: { value: number }, quality: Quality = 'ful
   // ---- solar array ------------------------------------------------------
   const panels = new THREE.Group();
   panels.name = 'LunarSolarArray';
-  panels.position.set(SITE.solar.x, LUNAR.pad, SITE.solar.z);
+  // On the terrain, not on the pad: the array stands outside the flattened
+  // area, and at pad height its junction box sat 5 cm under the dust.
+  panels.position.set(SITE.solar.x, lunarHeight(SITE.solar.x, SITE.solar.z), SITE.solar.z);
   const pylon = mesh(new THREE.CylinderGeometry(.008, .012, .17, 8), m.metal);
   pylon.position.y = .085;
   panels.add(pylon);

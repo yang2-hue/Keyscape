@@ -32,16 +32,16 @@ export type LunarPreset = {
 export const LUNAR_MOMENTS: LunarPreset[] = [
   {
     id: 'terminator', label: '晨昏', title: '晨昏线', night: false,
-    ambient: .05, ambientColor: '#93a8c8', hemisphere: .06, skyColor: '#8ea4c4', groundColor: '#22242a',
-    sun: 3.0, sunColor: '#fff3e6', fill: .42, fillColor: '#93b0d6', env: .2,
-    fog: .0035, fogColor: '#0d1014', key: [6.2, 3.4, 2.2],
+    ambient: .04, ambientColor: '#93a8c8', hemisphere: .035, skyColor: '#8299c0', groundColor: '#1e2228',
+    sun: 4.2, sunColor: '#ffe6c6', fill: .12, fillColor: '#8aa6d0', env: .08,
+    fog: .0035, fogColor: '#0d1014', key: [6.6, 2.35, 2.3],
     stars: .45, interior: .55, dust: .18,
   },
   {
     id: 'noon', label: '正午', title: '正午强光', night: false,
-    ambient: .16, ambientColor: '#dbe6f2', hemisphere: .1, skyColor: '#c9d8ea', groundColor: '#4b4a48',
-    sun: 3.4, sunColor: '#fbfdff', fill: .3, fillColor: '#b3c6dc', env: .18,
-    fog: 0, fogColor: '#0b0c0e', key: [2.6, 8.2, 1.8],
+    ambient: .032, ambientColor: '#c8d8ea', hemisphere: .025, skyColor: '#bccddd', groundColor: '#33322f',
+    sun: 3.5, sunColor: '#fbfdff', fill: .05, fillColor: '#a9bdd8', env: .035,
+    fog: 0, fogColor: '#0b0c0e', key: [3.6, 6.0, 2.6],
     stars: .12, interior: .16, dust: .05,
   },
   {
@@ -53,8 +53,8 @@ export const LUNAR_MOMENTS: LunarPreset[] = [
   },
   {
     id: 'night', label: '月夜', title: '月夜', night: true,
-    ambient: .085, ambientColor: '#8ba4c6', hemisphere: .07, skyColor: '#8fa6c8', groundColor: '#1b1f25',
-    sun: .04, sunColor: '#8ea7cd', fill: .14, fillColor: '#6d8cb4', env: .045,
+    ambient: .038, ambientColor: '#7f98bd', hemisphere: .03, skyColor: '#7d94b8', groundColor: '#13161a',
+    sun: .03, sunColor: '#8ea7cd', fill: .06, fillColor: '#5f7ea8', env: .025,
     fog: .006, fogColor: '#080a0d', key: [-5.4, 6.2, -3.4],
     stars: 1, interior: 1, dust: .1,
   },
