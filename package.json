@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
     "build": "tsc -b && vite build",
-    "test": "node --experimental-strip-types --test tests/layout.test.ts tests/crescent.test.ts tests/lunar.test.ts tests/coastal-forms.test.ts tests/coastal-assets.test.ts tests/harbor-assets.test.ts tests/gallery-state.test.ts tests/weather.test.ts tests/coastal-interactions.test.ts tests/harbor-gull.test.ts",
+    "test": "node --experimental-strip-types --test tests/layout.test.ts tests/crescent.test.ts tests/lunar.test.ts tests/coastal-forms.test.ts tests/coastal-assets.test.ts tests/harbor-assets.test.ts tests/gallery-state.test.ts tests/weather.test.ts tests/coastal-interactions.test.ts tests/harbor-gull.test.ts tests/fish-navigation.test.ts",
     "preview": "vite preview --host 127.0.0.1 --port 4173",
     "verify": "node scripts/verify.mjs",
     "verify:motion": "node scripts/verify-motion.mjs",

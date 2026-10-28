@@ -412,17 +412,17 @@ export function createCrescentBay(time:{value:number},artAssets?:CoastalArtAsset
       // Consecutive treads meet at their boundaries. Extra length makes the
       // flat first flight overlap itself at exactly the same depth.
       const yaw=Math.atan2(step.b.x-step.a.x,step.b.z-step.a.z);
-      const shades=['#c6c0af','#d2cbb8','#bbb6a7','#d9d1bf'];
-      add('access-stairs',wornStep,m.stone,{position:[x,step.top-.018,z],scale:[.14,.036,length],rotation:[0,yaw,0],color:shades[stepIndex++%4]});
+      const shades=['#e2dfd5','#dad7cc','#d4d2c8','#e6e1d5'];
+      add('access-stairs',wornStep,m.stone,{position:[x,step.top-.012,z],scale:[.14,.024,length*.98],rotation:[0,yaw,0],color:shades[stepIndex++%4]});
       // Bedded masonry supports connect each tread to the cut bank.
-      const bottom=Math.min(crescentHeight(x,z)-.06,step.top-.09),height=step.top-.036-bottom;
+      const bottom=Math.min(crescentHeight(x,z)-.06,step.top-.09),height=step.top-.024-bottom;
       const courses=Math.max(1,Math.ceil(height/.035));
-      for(let row=0;row<courses;row++)add('stair-foundations',wornStep,m.stone,{position:[x,bottom+(row+.5)*height/courses,z],scale:[.128,height/courses-.001,length*.96],rotation:[0,yaw,0],color:shades[(row+stepIndex)%4]});
+      for(let row=0;row<courses;row++)add('stair-foundations',wornStep,m.stone,{position:[x,bottom+(row+.5)*height/courses,z],scale:[.136,height/courses-.001,length*.96],rotation:[0,yaw,0],color:shades[(row+stepIndex)%4]});
     }
     for(const p of SHORE_STAIRS){
       // A small stone threshold sits above both the adjoining tread and the
       // timber deck; identical top heights previously fought in the overlap.
-      for(let ix=0;ix<2;ix++)for(let iz=0;iz<2;iz++)add('access-landings',wornStep,m.stone,{position:[p.x+(ix-.5)*.08,p.y-.025+.003,p.z+(iz-.5)*.08],scale:[.079,.05,.079],color:ix===iz?'#d0c8b5':'#c1bba9'});
+      for(let ix=0;ix<2;ix++)for(let iz=0;iz<2;iz++)add('access-landings',wornStep,m.stone,{position:[p.x+(ix-.5)*.08,p.y-.025+.003,p.z+(iz-.5)*.08],scale:[.079,.05,.079],color:ix===iz?'#e2dfd5':'#dad7cc'});
       const bottom=Math.min(crescentHeight(p.x,p.z)-.06,p.y-.12),height=p.y-.047-bottom;
       for(let row=0;row<3;row++)add('landing-masonry',wornStep,m.stone,{position:[p.x,bottom+(row+.5)*height/3,p.z],scale:[.15,height/3-.001,.15],color:row%2?'#bcb5a4':'#c8c0ae'});
     }
@@ -491,7 +491,10 @@ export function createCrescentBay(time:{value:number},artAssets?:CoastalArtAsset
       const a=route[i-1],b=route[i],length=Math.hypot(b.x-a.x,b.z-a.z),n=Math.max(1,Math.ceil(length/.045));
       for(let j=0;j<n;j++){
         const u=(j+.5)/n,x=THREE.MathUtils.lerp(a.x,b.x,u),z=THREE.MathUtils.lerp(a.z,b.z,u);
-        add('access-paving',box,m.stone,{position:[x,TERRACE-.005,z],scale:[.13,.05,length/n+.006],rotation:[0,Math.atan2(b.x-a.x,b.z-a.z),0],color:(i+j)%3?'#e7dfc9':'#cfc7b5'});
+        const yaw=Math.atan2(b.x-a.x,b.z-a.z);
+        // Two irregularly toned flagstones across the path instead of broad
+        // radial strips that read like a modern boardwalk.
+        for(const side of [-1,1])add('access-paving',box,m.stone,{position:[x+Math.cos(yaw)*side*.0325,TERRACE-.005,z-Math.sin(yaw)*side*.0325],scale:[.064,.05,Math.max(.005,length/n-.001)],rotation:[0,yaw,0],color:['#dedbd0','#d4d1c5','#e6e2d6'][(i+j+(side===1?1:0))%3]});
       }
     }
   };

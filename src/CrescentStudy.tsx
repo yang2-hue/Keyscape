@@ -1,3 +1,4 @@
+import {swimFish} from './fish-navigation';
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {useFrame,useThree,type ThreeEvent} from '@react-three/fiber';
 import * as THREE from 'three';
@@ -5,7 +6,7 @@ import {useGLTF} from '@react-three/drei';
 import {createCrescentBay,BERTH,CRESCENT,DOCK} from './crescent-bay';
 import {buildHeightfield,HARBOR,type Heightfield} from './harbor-layout';
 import {createWaterDynamics} from './water-dynamics';
-import {deformFish,fishBend,stepSpring,turnToward} from './scene-motion';
+import {deformFish,fishBend,stepSpring} from './scene-motion';
 import HarborWater from './HarborWater';
 import {Weather} from './weather';
 import {isWet,type WeatherKind} from './weather-model';
@@ -299,83 +300,18 @@ export default function CrescentStudy({playing,night,weather,action}:{playing:bo
     study.boat.userData.motionTime=t;
     study.fish.children.forEach((fish,i)=>{
       const phase=i*1.47;
-      const st=fish.userData.wander??(fish.userData.wander={x:CRESCENT.cx+(i%2?.20:-.22),z:CRESCENT.cz+(i<2?.18:-.16),heading:i*1.9,speed:.085+i*.016,turn:0});
-      if(playing){
-        // Smooth wandering: two slow sines never repeat a circle.
-        st.heading+=(Math.sin(t*.31+phase*3.1)*.55+Math.sin(t*.17+phase*7.3)*.4)*delta*2.4;
-        const lookX=st.x+Math.cos(st.heading)*.16,lookZ=st.z+Math.sin(st.heading)*.16;
-        const shallow=field.sample(lookX,lookZ)>HARBOR.water-FISH_MIN_DEPTH;
-        const far=Math.hypot(lookX-CRESCENT.cx,lookZ-CRESCENT.cz)>FISH_RADIUS-.04;
-        const nearBoat=Math.hypot(st.x-bx,st.z-bz)<FISH_BOAT_CLEARANCE+.06;
-        if(startle.current>0&&!shallow&&!far&&!nearBoat){
-          // Scatter: run straight away from the tap, faster than cruising.
-          const away=Math.atan2(st.z-startleAt.current.y,st.x-startleAt.current.x);
-          st.heading=turnToward(st.heading,away,delta*7);
-        }else if(shallow||far){
-          const home=Math.atan2(CRESCENT.cz-st.z,CRESCENT.cx-st.x)+Math.sin(t*.4+phase)*.5;
-          st.heading=turnToward(st.heading,home,delta*3.4);
-        }else if(nearBoat){
-          st.heading=turnToward(st.heading,Math.atan2(st.z-bz,st.x-bx),delta*5);
-        }
-        // Neighbours repel gently, leaving each fish its own swimming lane.
-        if(!shallow&&!far&&!nearBoat&&startle.current<=0){
-          for(const other of study.fish.children){if(other===fish)continue;
-            const ox=st.x-other.position.x,oz=st.z-other.position.z,d=Math.hypot(ox,oz);
-            if(d>.001&&d<.14)st.heading=turnToward(st.heading,Math.atan2(oz,ox),delta*(.14-d)*3);
-          }
-        }
-        const fear=THREE.MathUtils.smoothstep(startle.current,0,2.4);
-        const targetSpeed=st.speed*(.65+.25*(1+Math.sin(t*.48+phase)))*(1+fear*1.4);
-        st.velocity=THREE.MathUtils.damp(st.velocity??st.speed,targetSpeed,2.5,delta);
-        const speed=st.velocity;
-        // The body and displacement share a damped heading instead of sliding sideways.
-        const previous=fish.rotation.y;
-        fish.rotation.y=turnToward(previous,-st.heading,delta*.55);
-        const vx=Math.cos(-fish.rotation.y)*speed,vz=Math.sin(-fish.rotation.y)*speed;
-        const nx=st.x+vx*delta,nz=st.z+vz*delta;
-        const safe=field.sample(nx,nz)<HARBOR.water-FISH_MIN_DEPTH&&Math.hypot(nx-CRESCENT.cx,nz-CRESCENT.cz)<FISH_RADIUS;
-        if(safe){st.x=nx;st.z=nz;}
-        else{
-          st.velocity=THREE.MathUtils.damp(st.velocity,0,7,delta);
-          st.heading=turnToward(st.heading,Math.atan2(CRESCENT.cz-st.z,CRESCENT.cx-st.x),delta*4);
-        }
-        
-        st.turn=THREE.MathUtils.clamp(Math.atan2(Math.sin(fish.rotation.y-previous),Math.cos(fish.rotation.y-previous))/Math.max(delta,.001),-.9,.9);
+      const st=fish.userData.wander??(fish.userData.wander={x:CRESCENT.cx+(i%2?.20:-.22),z:CRESCENT.cz+(i===1?.06:i<2?.18:-.16),heading:i*1.9,speed:.085+i*.016,turn:0});
+      if(playing&&!document.hidden){
+        st.velocity??=st.speed;
+        swimFish(st,delta,{
+          time:t,phase,fear:THREE.MathUtils.smoothstep(startle.current,0,2.4),
+          away:Math.atan2(st.z-startleAt.current.y,st.x-startleAt.current.x),
+          safe:(x,z)=>field.sample(x,z)<HARBOR.water-FISH_MIN_DEPTH
+            &&Math.hypot(x-CRESCENT.cx,z-CRESCENT.cz)<FISH_RADIUS
+            &&Math.hypot(x-bx,z-bz)>Math.min(FISH_BOAT_CLEARANCE+.025,Math.max(0,Math.hypot(st.x-bx,st.z-bz)-.001)),
+        });
       }
-      // Soft bounds: steer away from the shore and ease the position back, so a
-      // fish grazing a rock slides along it instead of twitching in and out.
-      const dx=st.x-CRESCENT.cx,dz=st.z-CRESCENT.cz,dist=Math.hypot(dx,dz);
-      const bed=field.sample(st.x,st.z);
-      const tooShallow=bed>HARBOR.water-FISH_MIN_DEPTH;
-      const tooFar=dist>FISH_RADIUS;
-      if(playing&&(tooShallow||tooFar)){
-        // Deepest direction from the local bed gradient, or straight inward.
-        let ex:number,ez:number;
-        if(tooShallow){
-          const gx=field.sample(st.x+.035,st.z)-field.sample(st.x-.035,st.z);
-          const gz=field.sample(st.x,st.z+.035)-field.sample(st.x,st.z-.035);
-          const len=Math.hypot(gx,gz);
-          if(len>1e-5){ex=-gx/len;ez=-gz/len;}else{ex=CRESCENT.cx-st.x;ez=CRESCENT.cz-st.z;}
-        }else{ex=CRESCENT.cx-st.x;ez=CRESCENT.cz-st.z;}
-        const len=Math.hypot(ex,ez)||1;
-        if(playing){st.heading=turnToward(st.heading,Math.atan2(ez/len,ex/len),delta*4);}
-        // Gentle positional correction proportional to how far out it is.
-        const excess=Math.max(0,dist-FISH_RADIUS)+Math.max(0,bed-(HARBOR.water-FISH_MIN_DEPTH));
-        const push=Math.min(.02,excess*.5)*delta*10;
-        st.x+=(ex/len)*push;st.z+=(ez/len)*push;
-        // Emergency only: anything this far out would be visible as a fish on land.
-        if(dist>FISH_RADIUS+.08||bed>HARBOR.water-.05){
-          const k=(FISH_RADIUS*.96)/Math.max(dist,1e-4);
-          st.x=CRESCENT.cx+dx*k;st.z=CRESCENT.cz+dz*k;
-        }
-      }
-      // Never swim through the hull while it is drifting.
-      const bdx=st.x-bx,bdz=st.z-bz,bd=Math.hypot(bdx,bdz);
-      if(playing&&bd<FISH_BOAT_CLEARANCE){
-        const k=(FISH_BOAT_CLEARANCE+.004)/Math.max(bd,1e-4);
-        st.x=bx+bdx*k;st.z=bz+bdz*k;
-        st.heading=Math.atan2(st.z-bz,st.x-bx);
-      }
+      fish.rotation.y=-st.heading;
       // Vertical: stay above the bed and below the surface, damped so it never pops.
       const seabed=field.sample(st.x,st.z);
       const targetY=Math.min(HARBOR.water-.05,Math.max(seabed+.055,HARBOR.water-.13-(i%2)*.03+Math.sin(t*.65+phase)*.012));
