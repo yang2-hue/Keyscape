@@ -19,7 +19,7 @@ a{color:inherit;text-decoration:none}::selection{background:#7d879640}
 .gallery.space-terminator{--paper:#0d0f13}
 .gallery.space-noon{--paper:#0b0c0f}
 .gallery.space-dust{--paper:#141210;background-image:radial-gradient(ellipse at 50% 44%,#2b241d 0%,#090807 74%)}
-.gallery.space-night{--paper:#060708;background-image:radial-gradient(ellipse at 50% 56%,#12171e 0%,#040507 74%)}
+.gallery.space-night,.gallery.space-meteors{--paper:#060708;background-image:radial-gradient(ellipse at 50% 56%,#12171e 0%,#040507 74%)}
 .gallery.night{--paper:#050607;--ink:#f4f5f6;--ink-muted:#a8adb4;--ink-faint:#9299a2;--hairline:#ffffff24;--hairline-strong:#ffffff44;--panel:#111315;--veil:#050607ed;--accent:#f4f5f6;--surface-hover:#ffffff12;--surface-press:#ffffff20}
 .masthead{position:absolute;top:32px;left:40px;right:40px;display:flex;align-items:center;justify-content:space-between;z-index:3;pointer-events:none}
 .wordmark{font-size:28px;letter-spacing:-1.5px;font-weight:550;line-height:1.15;pointer-events:auto}

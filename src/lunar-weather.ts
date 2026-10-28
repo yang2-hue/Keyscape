@@ -2,7 +2,7 @@
  * base has to survive: a grazing terminator sun, a savage noon, a dust haze that
  * scatters the light, and the two-week night when only the lamps are alive. */
 
-export type LunarMoment = 'terminator' | 'noon' | 'dust' | 'night';
+export type LunarMoment = 'terminator' | 'noon' | 'dust' | 'night' | 'meteors';
 
 export type LunarPreset = {
   id: LunarMoment;
@@ -48,7 +48,7 @@ export const LUNAR_MOMENTS: LunarPreset[] = [
     id: 'dust', label: '微尘', title: '月尘', night: false,
     ambient: .22, ambientColor: '#c9baa6', hemisphere: .14, skyColor: '#b9aa98', groundColor: '#5a5147',
     sun: 1.7, sunColor: '#f0d3ad', fill: .18, fillColor: '#8d8d93', env: .08,
-    fog: .05, fogColor: '#6d6459', key: [5.2, 4.4, 3.4],
+    fog: .008, fogColor: '#222328', key: [5.2, 4.4, 3.4],
     stars: .26, interior: .38, dust: 1,
   },
   {
@@ -57,6 +57,13 @@ export const LUNAR_MOMENTS: LunarPreset[] = [
     sun: .03, sunColor: '#8ea7cd', fill: .06, fillColor: '#5f7ea8', env: .025,
     fog: .006, fogColor: '#080a0d', key: [-5.4, 6.2, -3.4],
     stars: 1, interior: 1, dust: .1,
+  },
+  {
+    id: 'meteors', label: '流星雨', title: '流星雨', night: true,
+    ambient: .045, ambientColor: '#7f98bd', hemisphere: .035, skyColor: '#7d94b8', groundColor: '#13161a',
+    sun: .06, sunColor: '#8ea7cd', fill: .07, fillColor: '#5f7ea8', env: .03,
+    fog: .002, fogColor: '#080a0d', key: [-5.4, 6.2, -3.4],
+    stars: 1, interior: 1, dust: .04,
   },
 ];
 

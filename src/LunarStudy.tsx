@@ -1,3 +1,5 @@
+import LunarMeteors from './LunarMeteors';
+import {lunarHeight} from './lunar-layout';
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { useGLTF, useTexture } from '@react-three/drei';
@@ -207,17 +209,14 @@ function Stars({ level }: { level: number }) {
   return <points ref={points} geometry={geometry} material={material} frustumCulled={false} renderOrder={-1000} />;
 }
 
-/** Dust lifted off the regolith during the dusty moment.
- *
- * Same trap as the stars: `sizeAttenuation` does nothing under an orthographic
- * camera, so a PointsMaterial mote of size 0.012 was a hundredth of a pixel and
- * the dusty moment had no dust in it at all. These keep a pixel size and drift on
- * two slow sine fields so the cloud never repeats. */
-function Dust({ level }: { level: number }) {
+/** Sparse near-surface grains with short low hops and a faded reset.
+ * Screen-pixel sizing remains necessary for the orthographic camera.
+ * An artistic micro-dust treatment, not an atmospheric wind simulation. */
+function Dust({ level, playing }: { level: number; playing:boolean }) {
   const cloud = useRef<THREE.Points>(null);
   const gl = useThree(state => state.gl);
   const field = useMemo(() => {
-    const count = 460;
+    const count = 220;
     const positions = new Float32Array(count * 3);
     const sizes = new Float32Array(count);
     const phases = new Float32Array(count);
@@ -226,9 +225,10 @@ function Dust({ level }: { level: number }) {
       // Hugging the key, not the whole frame: dust spread across the sky reads as
       // more stars, which is the one thing it must not look like.
       positions[i * 3] = (random() - .5) * 4.0;
-      positions[i * 3 + 1] = .015 + Math.pow(random(), 1.9) * .42;
-      positions[i * 3 + 2] = (random() - .5) * 1.5;
-      sizes[i] = 1.6 + random() * 3.4;
+      positions[i * 3 + 1] = 0;
+      positions[i * 3 + 2] = (random()>.5?1:-1)*(.47+random()*.19);
+      positions[i * 3 + 1] = lunarHeight(positions[i*3],positions[i*3+2])+.012;
+      sizes[i] = .7 + random() * 1.4;
       phases[i] = random() * Math.PI * 2;
     }
     const geometry = new THREE.BufferGeometry();
@@ -247,13 +247,13 @@ function Dust({ level }: { level: number }) {
         varying float vAlpha;
         void main(){
           vec3 p=position;
-          // Dust does not fall: it hangs and drifts.
-          p.x+=sin(uTime*.21+aPhase)*.06;
-          p.y+=sin(uTime*.37+aPhase*1.7)*.03;
-          p.z+=cos(uTime*.17+aPhase*.7)*.04;
+          // Sparse low hops, with an invisible reset; no atmospheric wind.
+          float life=fract(uTime*.13+aPhase/6.2831);
+          p.x+=(life-.5)*.024;
+          p.y+=4.0*life*(1.0-life)*(.025+.025*sin(aPhase)*sin(aPhase));
           gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.0);
           gl_PointSize=max(1.0,aSize*uPixelRatio);
-          vAlpha=uOpacity*(.45+.55*sin(uTime*.9+aPhase)*.5+.5);
+          vAlpha=uOpacity*smoothstep(0.0,.15,life)*(1.0-smoothstep(.75,1.0,life));
         }`,
       fragmentShader: `
         varying float vAlpha;
@@ -261,7 +261,7 @@ function Dust({ level }: { level: number }) {
           float r=length(gl_PointCoord-.5);
           if(r>.5)discard;
           float soft=1.0-smoothstep(0.0,.5,r);
-          gl_FragColor=vec4(vec3(.78,.71,.60),vAlpha*soft*soft*.42);
+          gl_FragColor=vec4(vec3(.65,.65,.63),vAlpha*soft*soft*.3);
         }`,
     });
     return { geometry, material, uniforms };
@@ -269,11 +269,11 @@ function Dust({ level }: { level: number }) {
   const { geometry, material, uniforms } = field;
   useEffect(() => () => { geometry.dispose(); material.dispose(); }, [geometry, material]);
   useFrame((_, dt) => {
-    const step = Math.min(dt, .05);
+    const step = document.hidden?0:Math.min(dt, .05);
     uniforms.uOpacity.value = THREE.MathUtils.damp(uniforms.uOpacity.value, level, 2, step);
-    uniforms.uTime.value += step;
+    if(playing)uniforms.uTime.value += step;
     uniforms.uPixelRatio.value = gl.getPixelRatio();
-    if (import.meta.env.DEV) gl.domElement.dataset.dust = uniforms.uOpacity.value.toFixed(2);
+    if (import.meta.env.DEV) {gl.domElement.dataset.dust = uniforms.uOpacity.value.toFixed(2);gl.domElement.dataset.dustTime=uniforms.uTime.value.toFixed(3);}
   });
   return <points ref={cloud} geometry={geometry} material={material} frustumCulled={false} />;
 }
@@ -451,6 +451,7 @@ export default function LunarStudy({ playing, moment }: { playing: boolean; mome
   return <>
     <primitive object={base.root} dispose={null} onClick={onClick} onPointerMove={onMove} onPointerOut={onOut} />
     <Stars level={preset.stars} />
-    <Dust level={preset.dust} />
+    <Dust level={preset.dust} playing={playing} />
+    <LunarMeteors active={moment==='meteors'} playing={playing} />
   </>;
 }
