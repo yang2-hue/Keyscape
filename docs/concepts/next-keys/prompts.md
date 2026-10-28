@@ -41,3 +41,31 @@ Key carrier: a thin ivory tapered keycap lip, subtly visible beneath the terrain
 
 Camera and art direction: a low 3/4 elevated view from near the lower station, able to see the entire rail ascending to the summit. Whole object in frame, carefully balanced visual masses and negative space. Soft bone-white studio backdrop and contact shadow, crisp pale winter morning light from one side, delicate cool slate shadows, creamy snow and warm muted timber. Tangible hand-built museum maquette quality with razor-fine railings, exact architectural joints, individually crafted tiny pines, snow overhangs and rough rock stratification. Restrained cinematic contrast, no oversaturated cyan, no toy plastic. Clear focal hierarchy and controlled detail, subtle optical depth of field while retaining both station silhouettes. Landscape 3:2 image. No labels, words, captions, watermarks, panels or collage. This is a new independent single-key visual concept, not an existing product screenshot.
 ```
+
+## q — approved hero (2026-10-28)
+
+The approved hero for Q lives at `q-abandoned-observatory.png`; its prompt was produced in an earlier turn and is not reproduced here. The three supplements below were generated on 2026-10-28 with the built-in imagegen tool, using the approved hero as an image-to-image reference. The `AI生成 / WORKBUDDY` mark added by the generator was removed with `work/clean-watermark.py` (mask-based neighbour fill, no crop, no rescale); the script is a development tool and stays out of the repository.
+
+### q closed dome / back view
+
+```text
+Keep the exact same miniature world, materials, lighting language and ivory keycap base shown in the attached approved concept image, and render a NEW camera angle of the SAME abandoned hilltop observatory. View: from the BACK-LEFT, slightly lower than the original, orbiting about 120 degrees around the model. The two dome halves are now FULLY CLOSED, meeting along a crisp meridian seam with a narrow dark gasket line, riveted copper flashing along the seam, a small maintenance ladder and two weathered vents on the dome. The circular ivory-plaster drum wall is visible with three small shuttered windows, patched stucco, water staining. On this side, the service stair wraps the drum and ends at a small iron door; the stone bridge is seen continuing away to the right-rear edge of the key, its Q-shaped tail curving out of frame. Rocky slope with dry grass, two dark conifers, warm amber light spilling from one small window and a single bridge lantern. Thin tapered ivory keycap plinth visible under the terrain, tiny engraved letter only on the front vertical lip, no giant lettering.
+
+Photoreal hand-built museum maquette, precise joinery, believable weathering, no plastic toy look. Near-charcoal seamless studio background, soft contact shadow, cool moonlight from upper left with a single warm interior accent. Whole object in frame with breathing room, sharp focal area, subtle depth of field. Landscape square 1:1. No text, labels, UI, collage, watermark or concept-sheet borders.
+```
+
+### q top-down plan
+
+```text
+Using the attached approved miniature as the same object and material language, produce a TOP-DOWN architectural plan view, camera almost directly overhead tilted 15 degrees, of the SAME single-key world. Purpose: read the layout, so the silhouette of the letter Q must be unmistakable from above. A circular ivory observatory drum with a partially open segmented dome sits at the upper left of a square ivory keycap plinth; from its east door a narrow stone footbridge runs diagonally to the lower right and then curls back left in a short tail, its railing and three lanterns tracing a clean Q stroke. A small gabled duty room with a slate roof, chimney and warm lit window is tucked against the drum's north-east side. The rest is rocky hillside: stepped stone retaining walls, gravel paths connecting door, bridge and service stair, dry grass tufts, four dark conifers, one small water cistern. The two dome halves are OPEN about 55 degrees, revealing the telescope's circular mirror and the iron ring floor with its spiral stair.
+
+Photoreal hand-built museum maquette seen from above, crisp raking light from the right, long soft shadows, precise stonework and metalwork, no toy plastic. Near-charcoal seamless studio backdrop, thin tapered ivory keycap edge visible, tiny engraved letter only on the front vertical lip. Whole model in frame with breathing room, square 1:1. No text, labels, arrows, UI, collage, watermark or concept-sheet borders.
+```
+
+### q interior section
+
+```text
+Using the attached approved miniature observatory as the same object, same materials and lighting, render an INTERIOR CROSS-SECTION cutaway of the circular building, cut cleanly along the north-south axis and viewed from the south-east, like a museum architectural model with a removable wall. Show, clearly and legibly: the ground floor with a worn oak desk, a brass lamp, chart drawers and a cast-iron stove; a tight spiral staircase in the curved wall rising through one floor; the upper observing floor as an iron ring gallery with a lattice railing; the equatorial fork mount on a stone pier with its counterweight and drive gears; the long open tube with its circular primary mirror, finder scope and counterweight rod, aimed through the dome slit at about 35 degrees above the horizontal. The two dome halves are open, their inner ribs and shutter mechanism visible, one half cut away. Ceiling height, floor thickness and the pier depth all read at a glance.
+
+Photoreal hand-built model craftsmanship: painted plaster, rusted iron, oiled brass, dust in the light, tiny bolts. Cut faces in a clean sectional plane, subtle red-ochre cut shading on the sectioned walls so the cut reads intentionally. Warm interior light plus cool moonlight through the slit. Near-charcoal seamless studio background, whole model in frame, square 1:1. No text, labels, callouts, arrows, UI, watermark or concept-sheet borders.
+```
