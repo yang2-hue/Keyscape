@@ -69,3 +69,16 @@ Using the attached approved miniature observatory as the same object, same mater
 
 Photoreal hand-built model craftsmanship: painted plaster, rusted iron, oiled brass, dust in the light, tiny bolts. Cut faces in a clean sectional plane, subtle red-ochre cut shading on the sectioned walls so the cut reads intentionally. Warm interior light plus cool moonlight through the slit. Near-charcoal seamless studio background, whole model in frame, square 1:1. No text, labels, callouts, arrows, UI, watermark or concept-sheet borders.
 ```
+
+### q top-down plan — proportion revision (supersedes the plan above)
+
+```text
+Revise the proportions of this exact miniature world. Keep the same materials, lighting, craft and the top-down camera (about 15 degrees off vertical), and keep the letter Q unmistakable — but fix the silhouette:
+
+1) THE OBSERVATORY BECOMES THE HERO AND IS MUCH BIGGER. Its circular ivory drum now takes roughly 55-60% of the key's width, dominating the composition. The segmented dome on top scales with it, open about 55 degrees.
+2) THE KEYCAP FOOTPRINT IS NO LONGER SQUARE: it becomes a landscape rounded rectangle, about 1.35:1, so the whole world sits on a longer base. Thin tapered ivory lip, tiny engraved Q only on the front vertical lip.
+3) THE BRIDGE TAIL IS SHORTER AND THICKER. From the drum's east door the stone bridge crosses a short gap and ends in a compact, sturdy tail that stops just beyond the drum's lower-right edge — one clean thick stroke of a printed Q, NOT a long loop curling back into the middle of the plinth. Two lanterns only. The tail and the drum must not touch.
+4) Rebalance the rest: duty room tucked tight against the drum's north-east side and smaller relative to it; shorter gravel path; two conifers at the west edge; retaining wall along the south edge; open rock and gravel where the old long bridge used to be.
+
+The plan must read instantly as the letter Q at thumbnail size: big round bowl, short thick tail at the lower right. Photoreal hand-built museum maquette, raking side light, fine stonework and metalwork, pale snow-free alpine rock, no toy plastic. Near-charcoal seamless studio backdrop, whole model in frame with breathing room. Landscape 3:2 image. No text, labels, arrows, UI, watermark or concept-sheet borders.
+```
