@@ -123,7 +123,11 @@ export function makeLunarMaterials(quality: 'full' | 'software' = 'full', baked?
     panelGlow: standard('#3a4a5e', .35, { metalness: .5, emissive: '#22303f', emissiveIntensity: .3 }),
     window: standard('#5d5a4e', .35, { emissive: '#ffca82', emissiveIntensity: 0 }),
     lamp: standard('#f3e6cf', .5, { emissive: '#ffcf94', emissiveIntensity: 1.6 }),
-    bed: standard('#6d6558', .95),
+    // Foundation slab: concrete, not the warm brown of the planting beds. The
+    // plinth is wider than the vault, so its exposed ledge is a big flat area
+    // and any colour cast there reads as a mistake.
+    concrete: standard('#a9a59c', .96, { map: hull.map }),
+    bed: standard('#5c554b', .95),
     leafA: standard('#4d6b3b', .9, { side: THREE.DoubleSide }),
     leafB: standard('#5d7a45', .9, { side: THREE.DoubleSide }),
     leafC: standard('#3f5a33', .92, { side: THREE.DoubleSide }),
@@ -132,10 +136,10 @@ export function makeLunarMaterials(quality: 'full' | 'software' = 'full', baked?
     // glass stacked in the same pixels, and the crops behind it turn to soup.
     glass: quality === 'full'
       ? new THREE.MeshPhysicalMaterial({ color: '#dcecee', roughness: .04, metalness: 0, transmission: .9, thickness: .02, ior: 1.45, transparent: true, opacity: .38, side: THREE.FrontSide, depthWrite: false })
-      : new THREE.MeshStandardMaterial({ color: '#e2f0f1', roughness: .05, metalness: 0, transparent: true, opacity: .14, side: THREE.FrontSide, depthWrite: false }),
+      : new THREE.MeshStandardMaterial({ color: '#dcecee', roughness: .05, metalness: 0, transparent: true, opacity: .2, side: THREE.FrontSide, depthWrite: false }),
     glassRoof: quality === 'full'
       ? new THREE.MeshPhysicalMaterial({ color: '#e2eeee', roughness: .1, transmission: .8, thickness: .02, transparent: true, opacity: .3, side: THREE.FrontSide, depthWrite: false })
-      : new THREE.MeshStandardMaterial({ color: '#e6f1f1', roughness: .1, transparent: true, opacity: .12, side: THREE.FrontSide, depthWrite: false }),
+      : new THREE.MeshStandardMaterial({ color: '#e6f1f1', roughness: .1, transparent: true, opacity: .2, side: THREE.FrontSide, depthWrite: false }),
   };
 
   return {

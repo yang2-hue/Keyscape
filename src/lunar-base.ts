@@ -300,6 +300,10 @@ export function createLunarBase(time: { value: number }, quality: Quality = 'ful
   // Authored in Blender (scripts/blender/author-lunar-base.py): three hull bays
   // with recessed seams, a bolted hatch, radiators, tanks and a mast. Falls back
   // to nothing if the asset is missing, which is why the study still builds.
+  /** East extent of the authored module (docs/assets.md): the mesh is centred on
+   * its own origin and its docking collar reaches 0.253 along +X — further than
+   * `SITE.habitat.length / 2`, which is why the corridor is measured from here. */
+  const HABITAT_EAST = .253;
   const habitat = new THREE.Group();
   habitat.name = 'LunarHabitat';
   habitat.position.set(SITE.habitat.x, LUNAR.pad + SITE.habitat.radius, SITE.habitat.z);
@@ -319,46 +323,61 @@ export function createLunarBase(time: { value: number }, quality: Quality = 'ful
   root.add(habitat);
 
   // ---- airlock and its door --------------------------------------------
+  // The corridor bridges two hard points: the docking collar on the module and
+  // the greenhouse end wall. It used to be a fixed 0.2-long tube placed by eye,
+  // which left a 4.7 cm gap behind it and 11 cm in front — at the default camera
+  // distance that reads as a part that fell off.
   const airlock = new THREE.Group();
   airlock.name = 'LunarAirlock';
-  airlock.position.set(SITE.airlock.x, LUNAR.pad + SITE.habitat.radius, SITE.airlock.z);
-  const tube = mesh(new THREE.CylinderGeometry(.082, .082, .2, 24), m.hullWarm);
+  const corridorStart = SITE.habitat.x + HABITAT_EAST;
+  const corridorEnd = SITE.greenhouse.x - SITE.greenhouse.length / 2;
+  const corridorLength = corridorEnd - corridorStart;
+  const airlockY = LUNAR.pad + SITE.habitat.radius;
+  airlock.position.set((corridorStart + corridorEnd) / 2, airlockY, SITE.airlock.z);
+  const tube = mesh(new THREE.CylinderGeometry(.096, .096, corridorLength, 28), m.hullWarm);
   tube.rotation.z = Math.PI / 2;
   airlock.add(tube);
-  const ring = mesh(new THREE.TorusGeometry(.086, .008, 6, 24), m.trim);
-  ring.rotation.y = Math.PI / 2;
-  ring.position.x = -.1;
-  airlock.add(ring);
-  const doorFrame = mesh(new THREE.BoxGeometry(.02, .15, .15), m.trim);
-  doorFrame.position.set(.102, 0, 0);
+  // Corrugation: two ribs break up an otherwise perfectly smooth pipe.
+  for (const t of [-.28, .12]) {
+    const rib = mesh(new THREE.TorusGeometry(.099, .006, 6, 24), m.trim);
+    rib.rotation.y = Math.PI / 2;
+    rib.position.x = corridorLength * t;
+    airlock.add(rib);
+  }
+  const collar = mesh(new THREE.TorusGeometry(.1, .009, 6, 28), m.trim);
+  collar.rotation.y = Math.PI / 2;
+  collar.position.x = -corridorLength / 2 + .008;
+  airlock.add(collar);
+  const doorFrame = mesh(new THREE.BoxGeometry(.02, .17, .17), m.trim);
+  doorFrame.position.set(corridorLength / 2 + .006, 0, 0);
   airlock.add(doorFrame);
   // Door leaves slide apart along Z.
   const doors = { left: new THREE.Group(), right: new THREE.Group() };
   for (const side of ['left', 'right'] as const) {
     const sign = side === 'left' ? -1 : 1;
-    const leaf = mesh(new THREE.BoxGeometry(.012, .128, .062), m.hull);
-    leaf.position.z = sign * .032;
+    const leaf = mesh(new THREE.BoxGeometry(.012, .15, .072), m.hull);
+    leaf.position.z = sign * .037;
     doors[side].add(leaf);
-    const handle = mesh(new THREE.BoxGeometry(.014, .026, .006), m.metal);
-    handle.position.set(.008, 0, sign * .052);
+    const handle = mesh(new THREE.BoxGeometry(.014, .028, .006), m.metal);
+    handle.position.set(.008, 0, sign * .06);
     doors[side].add(handle);
-    doors[side].position.set(.106, 0, 0);
+    doors[side].position.set(corridorLength / 2 + .016, 0, 0);
     airlock.add(doors[side]);
   }
-  // The door sits in a recess between two modules, so a click almost always
-  // lands on the habitat or the greenhouse behind it. An invisible proxy gives
-  // the hatch a reliable target.
+  // The door sits between two modules, so a click almost always lands on the
+  // habitat or the greenhouse behind it. An invisible proxy gives the hatch a
+  // reliable target.
   const doorHit = new THREE.Mesh(
-    new THREE.BoxGeometry(.16, .2, .2),
+    new THREE.BoxGeometry(corridorLength + .06, .24, .24),
     new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
   );
   doorHit.name = 'LunarAirlock';
-  doorHit.position.set(.02, 0, 0);
+  doorHit.position.set(0, 0, 0);
   airlock.add(doorHit);
-  const doorGlow = mesh(new THREE.PlaneGeometry(.052, .11), m.lamp.clone());
+  const doorGlow = mesh(new THREE.PlaneGeometry(.06, .13), m.lamp.clone());
   doorGlow.material = (doorGlow.material as THREE.MeshStandardMaterial);
   (doorGlow.material as THREE.MeshStandardMaterial).emissiveIntensity = 0;
-  doorGlow.position.set(.108, 0, 0);
+  doorGlow.position.set(corridorLength / 2 + .022, 0, 0);
   doorGlow.rotation.y = Math.PI / 2;
   airlock.add(doorGlow);
   root.add(airlock);
@@ -368,7 +387,7 @@ export function createLunarBase(time: { value: number }, quality: Quality = 'ful
   greenhouse.name = 'LunarGreenhouseShell';
   const gh = SITE.greenhouse;
   greenhouse.position.set(gh.x, LUNAR.pad, gh.z);
-  const plinth = mesh(new THREE.BoxGeometry(gh.length + .06, gh.plinth, gh.radius * 2 + .06), m.bed);
+  const plinth = mesh(new THREE.BoxGeometry(gh.length + .06, gh.plinth, gh.radius * 2 + .06), m.concrete);
   plinth.position.y = gh.plinth / 2;
   greenhouse.add(plinth);
   // Glass shell and frame ribs.
