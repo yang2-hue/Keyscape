@@ -119,7 +119,10 @@ export function makeLunarMaterials(quality: 'full' | 'software' = 'full', baked?
     trim: standard('#c9c3b6', .6, { metalness: .15 }),
     metal: standard('#a3a8ae', .32, { metalness: .88 }),
     darkMetal: standard('#4a4f55', .45, { metalness: .7 }),
-    panel: standard('#3b4d68', .34, { metalness: .7 }),
+    // Metalness on a panel is a trap in a dark scene: at .7 there is almost no
+    // diffuse term left and the array reads as a hole. Mostly dielectric, with
+    // just enough metal to catch a highlight.
+    panel: standard('#4a5f82', .42, { metalness: .3 }),
     panelGlow: standard('#3a4a5e', .35, { metalness: .5, emissive: '#22303f', emissiveIntensity: .3 }),
     window: standard('#5d5a4e', .35, { emissive: '#ffca82', emissiveIntensity: 0 }),
     lamp: standard('#f3e6cf', .5, { emissive: '#ffcf94', emissiveIntensity: 1.6 }),

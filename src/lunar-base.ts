@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { LUNAR, SITE, lunarHeight, noise2, roundedRectPoint, spacebarOutline } from './lunar-layout';
+import { CRATERS, LUNAR, SITE, lunarHeight, noise2, roundedRectPoint, spacebarOutline } from './lunar-layout';
 import { makeLunarMaterials, type LunarMaterials, type RegolithMaps } from './lunar-materials';
 import { seeded } from './coastal-materials';
 
@@ -183,7 +183,9 @@ export function createLunarBase(time: { value: number }, quality: Quality = 'ful
     const shade = .98 + .02 * Math.sin(x * 21 + z * 17)
       + .035 * (noise2(x * 2.6 + 4.2, z * 2.6 - 1.7) - .5)
       + .025 * (noise2(x * 5.9 - 2.3, z * 5.9 + 3.1) - .5)
-      - craterDepth(h) * 2.2;
+      // The floor is darker because it is dust-filled and shadowed, not because
+      // it is a hole: past ~0.12 of depth the darkening flattens out.
+      - Math.min(.16, craterDepth(h) * 1.05);
     const base = palette[i % palette.length];
     const c = base.clone().multiplyScalar(Math.max(.46, Math.min(1.02, shade)));
     colors.push(c.r, c.g, c.b);
@@ -217,6 +219,11 @@ export function createLunarBase(time: { value: number }, quality: Quality = 'ful
   const boulderMaterial = m.boulder.clone();
   boulderMaterial.color.set('#ffffff');
 
+  // Nothing stays inside a fresh bowl: the impact cleared it, and a rock sitting
+  // in the floor was the most obviously wrong thing about the old crater.
+  const inBowl = (x: number, z: number) => CRATERS.some(
+    c => Math.hypot(x - c.x, z - c.z) < c.radius * (c.radius > .2 ? 1.02 : 1.3),
+  );
   const boulderSpots: { x: number; z: number; s: number }[] = [];
   for (let i = 0; i < 46; i++) {
     const angle = random() * Math.PI * 2;
@@ -224,6 +231,7 @@ export function createLunarBase(time: { value: number }, quality: Quality = 'ful
     const x = Math.cos(angle) * rx * (.72 + random() * .26);
     const z = Math.sin(angle) * rz * (.7 + random() * .28);
     if (Math.abs(z) < .42 && x > -1.05 && x < 1.35) continue;
+    if (inBowl(x, z)) continue;
     boulderSpots.push({ x, z, s: .018 + random() * .05 });
   }
   // Rim of the hero crater, and a cluster at the east end like the reference.
@@ -270,14 +278,18 @@ export function createLunarBase(time: { value: number }, quality: Quality = 'ful
   for (let i = 0; i < 5200; i++) {
     const x = (random() - .5) * 3.54, z = (random() - .5) * 1.36;
     if (!clearOfBuild(x, z)) continue;
-    // Strongly biased to the small end: a field of equal stones is a pattern.
-    pebbleSpots.push({ x, z, s: .0022 + Math.pow(random(), 2.6) * .009, flat: .45 + random() * .4 });
+    const s = .0022 + Math.pow(random(), 2.6) * .009;
+    // A fresh bowl has no boulders in it, but it is not swept clean either: the
+    // grit that fell back stays. Without it the interior reads as moulded clay,
+    // because the small stones are what carry the surface's texture.
+    if (inBowl(x, z) && s > .0055) continue;
+    pebbleSpots.push({ x, z, s, flat: .45 + random() * .4 });
   }
   // Compacted clods: flattened lumps an order of magnitude larger, the "dirt"
   // between the stones.
   for (let i = 0; i < 320; i++) {
     const x = (random() - .5) * 3.5, z = (random() - .5) * 1.36;
-    if (!clearOfBuild(x, z)) continue;
+    if (!clearOfBuild(x, z) || inBowl(x, z)) continue;
     pebbleSpots.push({ x, z, s: .012 + random() * .022, flat: .22 + random() * .18 });
   }
   const pebbles = new THREE.InstancedMesh(pebbleGeometry, boulderMaterial, pebbleSpots.length);
@@ -538,27 +550,35 @@ export function createLunarBase(time: { value: number }, quality: Quality = 'ful
   // On the terrain, not on the pad: the array stands outside the flattened
   // area, and at pad height its junction box sat 5 cm under the dust.
   panels.position.set(SITE.solar.x, lunarHeight(SITE.solar.x, SITE.solar.z), SITE.solar.z);
-  const pylon = mesh(new THREE.CylinderGeometry(.008, .012, .17, 8), m.metal);
-  pylon.position.y = .085;
+  // A cast base plate so the mast does not look like it is hovering: on rough
+  // ground the thin pylon alone gave no contact.
+  const footing = mesh(new THREE.CylinderGeometry(.034, .042, .018, 12), m.concrete);
+  footing.position.y = .009;
+  panels.add(footing);
+  // Taller than a panel lying on the ground: at the key's scale a flat array
+  // reads as a puddle of dark blue. Standing it up on a mast gives it a
+  // silhouette and a shadow, which is the only thing that makes it legible.
+  const pylon = mesh(new THREE.CylinderGeometry(.009, .013, .26, 8), m.metal);
+  pylon.position.y = .14;
   panels.add(pylon);
-  const arm = mesh(new THREE.BoxGeometry(.05, .012, .30), m.darkMetal);
-  arm.position.y = .17;
+  const arm = mesh(new THREE.BoxGeometry(.05, .012, .34), m.darkMetal);
+  arm.position.y = .268;
   panels.add(arm);
-  const junction = mesh(new THREE.BoxGeometry(.05, .035, .04), m.hullWarm);
-  junction.position.set(.04, .05, .05);
+  const junction = mesh(new THREE.BoxGeometry(.05, .04, .045), m.hullWarm);
+  junction.position.set(.05, .05, .06);
   panels.add(junction);
   for (const side of [-1, 1]) {
-    const frame = mesh(new THREE.BoxGeometry(.30, .008, .16), m.darkMetal);
-    frame.position.set(0, .19, side * .12);
-    frame.rotation.x = side * .42;
+    const frame = mesh(new THREE.BoxGeometry(.34, .008, .18), m.darkMetal);
+    frame.position.set(0, .282, side * .13);
+    frame.rotation.x = side * .38;
     panels.add(frame);
-    const cells = mesh(new THREE.BoxGeometry(.285, .004, .146), m.panel);
-    cells.position.set(0, .196, side * .12);
-    cells.rotation.x = side * .42;
+    const cells = mesh(new THREE.BoxGeometry(.325, .004, .166), m.panel);
+    cells.position.set(0, .288, side * .13);
+    cells.rotation.x = side * .38;
     panels.add(cells);
-    const strut = mesh(new THREE.BoxGeometry(.012, .012, .09), m.metal);
-    strut.position.set(0, .155, side * .075);
-    strut.rotation.x = side * .42;
+    const strut = mesh(new THREE.BoxGeometry(.012, .012, .10), m.metal);
+    strut.position.set(0, .245, side * .085);
+    strut.rotation.x = side * .38;
     panels.add(strut);
   }
   root.add(panels);

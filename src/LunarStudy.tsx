@@ -75,11 +75,17 @@ export function LunarAtmosphere({ moment }: { moment: LunarMoment }) {
     <fogExp2 ref={fog} attach="fog" args={['#0a0c10', 0]} />
     <ambientLight name="LunarAmbient" ref={ambient} intensity={initial.ambient} color={initial.ambientColor} />
     <hemisphereLight name="LunarSky" ref={hemi} intensity={initial.hemisphere} color={initial.skyColor} groundColor={initial.groundColor} />
+    {/* A 0.5–22 shadow depth range spent almost all of the map's precision on
+      * empty space, and a grazing sun turned what was left into diagonal acne
+      * bands across the regolith. The key sits 5–10 units from the light, so
+      * 3–12 keeps the budget on it and lets the bias stay tiny — a large
+      * normalBias would lift the contact shadows off 3 mm pebbles. */}
     <directionalLight
       name="LunarSun" ref={sun} position={initial.key} intensity={initial.sun} color={initial.sunColor}
       castShadow shadow-mapSize={[4096, 4096]}
-      shadow-camera-left={-2.4} shadow-camera-right={2.4} shadow-camera-top={1.6} shadow-camera-bottom={-1.6}
-      shadow-camera-near={.5} shadow-camera-far={22} shadow-normalBias={.004} shadow-bias={-.00006} shadow-radius={2}
+      shadow-camera-left={-2.6} shadow-camera-right={2.6} shadow-camera-top={1.9} shadow-camera-bottom={-1.9}
+      shadow-camera-near={3} shadow-camera-far={12}
+      shadow-normalBias={.006} shadow-bias={-.0001} shadow-radius={2}
     />
     <directionalLight name="LunarEarthshine" ref={fill} position={[3.2, 2.4, -3.6]} intensity={initial.fill} color={initial.fillColor} />
   </>;
@@ -124,7 +130,7 @@ function Stars({ level }: { level: number }) {
         dir.set(Math.sin(v) * Math.cos(u), Math.cos(v), Math.sin(v) * Math.sin(u));
         if (!inBand || Math.abs(dir.dot(bandNormal)) < .16) break;
       }
-      const radius = 8 + random() * 2.2;
+      const radius = 26 + random() * 6;
       positions[i * 3] = dir.x * radius;
       positions[i * 3 + 1] = dir.y * radius;
       positions[i * 3 + 2] = dir.z * radius;
@@ -149,7 +155,7 @@ function Stars({ level }: { level: number }) {
       uPixelRatio: { value: 1 },
     };
     const material = new THREE.ShaderMaterial({
-      uniforms, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
+      uniforms, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
       vertexShader: `
         attribute float aSize;
         attribute float aPhase;
@@ -189,8 +195,10 @@ function Stars({ level }: { level: number }) {
     uniforms.uTime.value += step;
     uniforms.uPixelRatio.value = gl.getPixelRatio();
     if (points.current) {
-      // Ride with the camera and never occlude: a star is at infinity, so it must
-      // not slide behind the key or grow when the visitor zooms in.
+      // Ride with the camera so a star never grows or slides as the visitor zooms,
+      // but keep depth testing: the shell has to sit far enough behind the key
+      // that it is occluded by it. At radius 8 with depthTest off, stars were
+      // drawn straight over the habitat and the keycap.
       points.current.position.copy(camera.position);
       points.current.rotation.y += step * .0025;
     }
@@ -276,6 +284,7 @@ export default function LunarStudy({ playing, moment }: { playing: boolean; mome
   const gl = useThree(state => state.gl);
   const invalidate = useThree(state => state.invalidate);
   const camera = useThree(state => state.camera);
+  const scene = useThree(state => state.scene);
   const software = useSoftwareRenderer();
   const time = useMemo(() => ({ value: 0 }), []);
   const habitat = useGLTF(`${import.meta.env.BASE_URL}models/lunar/lunar-habitat.glb`);
@@ -334,11 +343,40 @@ export default function LunarStudy({ playing, moment }: { playing: boolean; mome
           return [rect.left + (v.x * .5 + .5) * rect.width, rect.top + (-v.y * .5 + .5) * rect.height];
         };
         const p = new THREE.Vector3();
-        for (const [name, dy] of [['LunarAirlock', .0], ['LunarGreenhouseShell', .18], ['LunarSolarArray', .12]] as const) {
+        // Anchors sit on the part a visitor would actually hit: the array is a mast,
+        // so its clickable surface is 0.28 above the ground, not 0.12.
+        for (const [name, dy] of [['LunarAirlock', .0], ['LunarGreenhouseShell', .18], ['LunarSolarArray', .29]] as const) {
           const node = base.root.getObjectByName(name);
           if (node) { node.getWorldPosition(p); out[name] = project(p.x, p.y + dy, p.z); }
         }
         return out;
+      },
+      /** Shadow-map tuning hook: acne shows up as bands on a flat receiver and
+       * the fix is a bias/normalBias balance, which is much faster to sweep here
+       * than to rebuild for. DEV only. */
+      setShadow(options: { bias?: number; normalBias?: number; radius?: number; near?: number; far?: number }) {
+        const light = scene.getObjectByName('LunarSun') as THREE.DirectionalLight | null;
+        if (!light) return false;
+        if (options.bias !== undefined) light.shadow.bias = options.bias;
+        if (options.normalBias !== undefined) light.shadow.normalBias = options.normalBias;
+        if (options.radius !== undefined) light.shadow.radius = options.radius;
+        if (options.near !== undefined) light.shadow.camera.near = options.near;
+        if (options.far !== undefined) light.shadow.camera.far = options.far;
+        light.shadow.camera.updateProjectionMatrix();
+        return true;
+      },
+      /** Toggle parts of the terrain material to find which one produces a
+       * pattern (DEV only; the flags are restored on the next mount). */
+      setGround(flags: { map?: boolean; normal?: boolean; vertexColors?: boolean; shadows?: boolean }) {
+        const terrain = base.root.getObjectByName('LunarTerrain') as THREE.Mesh | null;
+        const material = terrain?.material as THREE.MeshStandardMaterial | undefined;
+        if (!terrain || !material) return false;
+        if (flags.vertexColors !== undefined) material.vertexColors = flags.vertexColors;
+        if (flags.map !== undefined) material.map = flags.map ? material.map : null;
+        if (flags.normal !== undefined) material.normalMap = flags.normal ? material.normalMap : null;
+        if (flags.shadows !== undefined) terrain.receiveShadow = flags.shadows;
+        material.needsUpdate = true;
+        return true;
       },
       /** What the terrain material actually ended up with, so a missing map or a
        * silently ignored normal cannot be mistaken for "the art is flat". */
@@ -364,7 +402,7 @@ export default function LunarStudy({ playing, moment }: { playing: boolean; mome
       },
     };
     return () => { delete debug.__lunarLandmarks; };
-  }, [base, camera, gl]);
+  }, [base, camera, gl, scene]);
 
   useFrame((_, dt) => {
     const delta = Math.min(dt, 0.05);

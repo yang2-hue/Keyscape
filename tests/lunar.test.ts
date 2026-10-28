@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { LUNAR, SITE, lunarHeight, roundedRectPoint, spacebarOutline } from '../src/lunar-layout.ts';
+import { CRATERS, LUNAR, SITE, lunarHeight, roundedRectPoint, spacebarOutline } from '../src/lunar-layout.ts';
 
 test('the spacebar outline is a closed rounded rectangle', () => {
   const points = spacebarOutline();
@@ -97,7 +97,11 @@ test('grain is suppressed under the modules so nothing intrudes on the pad', () 
       }
     }
   }
-  // The solar array stands on the open regolith, so it is the one build that
-  // must follow the terrain instead of the pad.
-  assert.ok(Math.abs(lunarHeight(SITE.solar.x, SITE.solar.z) - LUNAR.pad) > 0.005, 'the solar site should sit on open ground, not on the flattened pad');
+  // The array is a mast on level ground: a slope would lean it, and a bowl would
+  // bury it. Both are checked because the site has moved twice already.
+  assert.ok(Math.abs(lunarHeight(SITE.solar.x, SITE.solar.z) - LUNAR.pad) < 0.02, 'the solar site has to be level');
+  for (const crater of CRATERS) {
+    const gap = Math.hypot(SITE.solar.x - crater.x, SITE.solar.z - crater.z);
+    assert.ok(gap > crater.radius * 1.4, `the solar array sits inside the crater at ${crater.x}, ${crater.z}`);
+  }
 });

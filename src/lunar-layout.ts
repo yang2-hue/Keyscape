@@ -15,14 +15,25 @@ export const LUNAR = {
   center: { x: 0.42, z: 0 },
 };
 
+/** Impact craters, west to east: one hero crater, a secondary, and three
+ * satellites that make the west end read as a cratered field rather than a
+ * single hole. */
+export const CRATERS = [
+  { x: -1.3, z: 0.02, radius: 0.36, depth: 0.16 },
+  { x: 1.44, z: -0.3, radius: 0.15, depth: 0.05 },
+  { x: -1.56, z: -0.28, radius: 0.075, depth: 0.026 },
+  { x: -1.65, z: 0.26, radius: 0.055, depth: 0.018 },
+  { x: 1.56, z: 0.3, radius: 0.06, depth: 0.02 },
+];
+
 /** Where each structure lives, in study coordinates (X = long axis). */
 export const SITE = {
-  crater: { x: -1.3, z: 0.02, radius: 0.36, depth: 0.17 },
-  craterSmall: { x: 1.44, z: -0.3, radius: 0.15, depth: 0.05 },
+  crater: CRATERS[0],
+  craterSmall: CRATERS[1],
   habitat: { x: -0.34, z: 0.02, radius: 0.185, length: 0.44 },
   airlock: { x: 0.06, z: 0.02 },
   greenhouse: { x: 0.76, z: 0.02, radius: 0.25, length: 0.98, plinth: 0.05 },
-  solar: { x: -0.92, z: 0.3 },
+  solar: { x: -0.64, z: 0.5 },
   walkway: { z: 0.27 },
 };
 
@@ -90,16 +101,34 @@ export function noise2(x: number, z: number) {
  * secondary crater at the east end, and a flat pad under the modules. */
 export function lunarHeight(x: number, z: number) {
   let h = 0.014 * Math.sin(x * 3.1 + Math.cos(z * 4.6)) + 0.008 * Math.sin(z * 7.2 - x * 2.4);
-  // Hero crater with a raised rim: inside dips, rim rises, outside falls back.
+  // A fresh simple crater is not a smooth dish. It has a flat floor, a wall that
+  // steepens to a narrow crest standing above the surrounding ground, and then
+  // an ejecta apron that thins out over about one radius.
   const crater = (cx: number, cz: number, radius: number, depth: number) => {
-    const d = Math.hypot(x - cx, z - cz) / radius;
-    if (d > 1.9) return 0;
-    const bowl = -depth * (1 - smooth(d, 0.55, 1.05));
-    const rim = depth * 0.55 * Math.exp(-((d - 1.02) ** 2) / 0.06);
-    return bowl + rim;
+    const dx = x - cx, dz = z - cz;
+    const d = Math.hypot(dx, dz) / radius;
+    if (d > 2.1) return 0;
+    const angle = Math.atan2(dz, dx);
+    const bowl = -depth * (1 - smooth(d, 0.34, 0.97));
+    // The crest is a narrow ridge just outside the wall; a wide gaussian here is
+    // what made the old crater read as a dimple instead of an impact.
+    // Its height and radius vary with angle, because a real rim is never a circle.
+    const wobble = 1 + .08 * Math.sin(angle * 3.1 + cx * 7) + .05 * Math.sin(angle * 7.3 + cz * 5);
+    const rim = depth * .5 * wobble * Math.exp(-((d - 1.05 * wobble) ** 2) / 0.011);
+    // Radial striations down the inner wall: slumping leaves grooves running
+    // toward the floor, and they are what stops the bowl reading as plaster.
+    const band = 1 - smooth(Math.abs(d - .76), .05, .26);
+    // Slump grooves: shallow, low-count, and only on the upper wall. Higher
+    // counts turned the bowl into a pleated curtain in grazing light.
+    const striae = band * depth * .045 * (Math.sin(angle * 11 + d * 6) + .5 * Math.sin(angle * 19 + 1.7));
+    // Ejecta rays: a few directions threw further than the rest.
+    const rays = 1 + .55 * Math.sin(angle * 5.2 + 1.1) * Math.sin(angle * 2.7 - .4);
+    const ejecta = depth * .16 * rays * (1 - smooth(d, 1.08, 1.95));
+    return bowl + rim + striae + ejecta;
   };
-  h += crater(SITE.crater.x, SITE.crater.z, SITE.crater.radius, SITE.crater.depth);
-  h += crater(SITE.craterSmall.x, SITE.craterSmall.z, SITE.craterSmall.radius, SITE.craterSmall.depth);
+  for (const craterSite of CRATERS) {
+    h += crater(craterSite.x, craterSite.z, craterSite.radius, craterSite.depth);
+  }
   // A low ridge behind the modules: without it the surface reads as a flat
   // plate of sand rather than a section of regolith.
   h += .05 * Math.exp(-((z + .58) ** 2) / .012) * smooth(x + 1.9, -1.2, .4) * (1 - smooth(x, 1.1, 1.7));
