@@ -576,6 +576,13 @@ export function createLunarBase(time: { value: number }, quality: Quality = 'ful
     cells.position.set(0, .288, side * .13);
     cells.rotation.x = side * .38;
     panels.add(cells);
+    // Cell dividers: without them a PV panel is a blue signboard.
+    for (let i = 1; i < 5; i++) {
+      const divider = mesh(new THREE.BoxGeometry(.0035, .005, .166), m.metal);
+      divider.position.set(-.1625 + .065 * i, .289, side * .13);
+      divider.rotation.x = side * .38;
+      panels.add(divider);
+    }
     const strut = mesh(new THREE.BoxGeometry(.012, .012, .10), m.metal);
     strut.position.set(0, .245, side * .085);
     strut.rotation.x = side * .38;
