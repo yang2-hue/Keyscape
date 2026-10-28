@@ -35,20 +35,41 @@ function vaultGeometry(radius: number, length: number, segments = 26, rings = 10
   return geometry;
 }
 
-/** A quiet plant: three overlapping blobs, no texture, read as mass at this
- * scale. Kept as a shared geometry and instanced per bed. */
+/** A plant is a tuft of tapered blades, not a ball. Blobs read as balloons at
+ * this size; nine thin cards give a foliage silhouette for the same triangle
+ * count as one low-poly sphere. */
 function plantGeometry() {
-  const parts: THREE.BufferGeometry[] = [];
-  const random = seeded(77);
-  for (let i = 0; i < 3; i++) {
-    const g = new THREE.IcosahedronGeometry(1, 1);
-    g.scale(.9 + random() * .3, .7 + random() * .35, .9 + random() * .3);
-    g.translate((random() - .5) * .9, .5 + random() * .5, (random() - .5) * .9);
-    parts.push(g);
+  const position: number[] = [], index: number[] = [];
+  const random = seeded(91);
+  const blades = 16;
+  for (let b = 0; b < blades; b++) {
+    const angle = random() * Math.PI * 2;
+    const lean = .25 + random() * .55;
+    const height = .6 + random() * .55;
+    const halfWidth = .07 + random() * .03;
+    const dirX = Math.cos(angle), dirZ = Math.sin(angle);
+    const sideX = -dirZ, sideZ = dirX;
+    const base = position.length / 3;
+    const steps = 3;
+    for (let s = 0; s <= steps; s++) {
+      const t = s / steps;
+      const width = halfWidth * (1 - t * .85);
+      // Bend outward as it rises, so the tuft opens instead of standing rigid.
+      const bend = lean * t * t * height;
+      const cx = dirX * bend, cy = t * height, cz = dirZ * bend;
+      position.push(cx + sideX * width, cy, cz + sideZ * width);
+      position.push(cx - sideX * width, cy, cz - sideZ * width);
+    }
+    for (let s = 0; s < steps; s++) {
+      const a = base + s * 2;
+      index.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+    }
   }
-  const merged = mergeGeometries(parts);
-  parts.forEach(p => p.dispose());
-  return merged;
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(position, 3));
+  geometry.setIndex(index);
+  geometry.computeVertexNormals();
+  return geometry;
 }
 
 function mergeGeometries(parts: THREE.BufferGeometry[]) {
@@ -360,7 +381,7 @@ export function createLunarBase(time: { value: number }, quality: Quality = 'ful
     beds.add(soil);
     // Two heights of planting: a low crop and a taller row that reaches up the
     // glazing, which is what makes a greenhouse read as one.
-    const rows = [{ count: 20, size: [.013, .022], y: .046 }, { count: 9, size: [.026, .05], y: .046, tall: true }];
+    const rows = [{ count: 34, size: [.032, .05], y: .046 }, { count: 14, size: [.05, .075], y: .046, tall: true }];
     for (const row of rows) for (let i = 0; i < row.count; i++) {
       const step = (gh.length - .12) / row.count;
       const x = -(gh.length - .12) / 2 + step * (i + .5) + (row.tall ? step * .4 : 0);
