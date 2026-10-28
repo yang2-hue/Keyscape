@@ -37,11 +37,10 @@ async function loadPlaywright() {
   throw new Error('Playwright not found. Set PLAYWRIGHT_MODULE to its entry file.');
 }
 
+// The exhibition holds two keys; the switch is the label row in the footer.
 const WORKS = [
-  { tab: '灯塔', title: '潮汐之间' },
-  { tab: '月牙', title: '月湾环抱' },
-  { tab: '拱洞', title: '云门拱语' },
-  { tab: '石拱', title: '蓝洞来信' },
+  { tab: 'SPACE / LUNAR', world: 'space' },
+  { tab: 'C / COASTAL', world: 'coastal' },
 ];
 
 const { chromium } = await loadPlaywright();
@@ -51,7 +50,7 @@ const samples = [];
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   page.on('pageerror', e => samples.push({ error: e.message }));
-  await page.goto(`${BASE}/?work=harbor`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`${BASE}/?work=coastal`, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => window.__harborDebug?.gl, null, { timeout: 240000 });
   // Keep one reference to the (single) renderer: __harborDebug is removed when a
   // study without water unmounts.
@@ -62,13 +61,17 @@ try {
     console.log(`${label.padEnd(22)} textures=${String(info.textures).padStart(4)}  geometries=${String(info.geometries).padStart(4)}  programs=${info.programs}`);
   };
   await page.waitForTimeout(3000);
-  await read('baseline (harbor)');
+  await read('baseline (coastal)');
   for (let round = 1; round <= ROUNDS; round++) {
     for (const work of WORKS) {
-      await page.locator('button.work-tab').filter({ hasText: work.tab }).click();
-      await page.waitForFunction(t => document.querySelector('h1')?.textContent?.trim() === t, work.title, { timeout: 240000 });
+      await page.locator('.work-option').filter({ hasText: work.tab }).click();
+      await page.waitForFunction(w => document.querySelector('main')?.dataset.world === w, work.world, { timeout: 240000 });
+      // Textures and geometries are allocated during the first rendered frames,
+      // so wait for the frame counter to move before reading memory.
+      const before = Number((await page.evaluate(() => document.querySelector('canvas')?.dataset.renderFrames)) ?? 0);
+      await page.waitForFunction(v => Number(document.querySelector('canvas')?.dataset.renderFrames ?? 0) > v + 3, before, { timeout: 120000 }).catch(() => {});
       await page.waitForTimeout(2500);
-      await read(`r${round} ${work.title}`);
+      await read(`r${round} ${work.world}`);
     }
   }
 } finally {

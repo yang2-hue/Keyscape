@@ -332,6 +332,11 @@ try {
   // back to an event wait before calling it a failure.
   check('playing renders continuously', playingFrames > 0 || await framesAdvance(page, 2, 60000), `${playingFrames} frames in 2.5s (software renderer)`);
 
+  // Hold the moment loop first. With a 6 s dwell it can step inside the 2.5 s
+  // measurement window, and a moment change re-arms the transition pump even
+  // while the loop is paused — a straggler frame, not a failure to pause.
+  await page.evaluate(() => window.__galleryCycle.set(0));
+  await settle(page);
   await page.getByRole('button', { name: /暂停动态/ }).click();
   await page.waitForFunction(() => document.querySelector('canvas')?.dataset.renderMode === 'demand', null, { timeout: 30000 });
   await settle(page);
