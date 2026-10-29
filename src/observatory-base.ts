@@ -4,15 +4,31 @@ import { seeded } from './coastal-materials';
 
 type Quality = 'full' | 'software';
 
+/** Blender-authored parts loaded from `public/models/observatory/observatory.glb`.
+ * The dome halves, telescope and duty room are replaced by these when present;
+ * the terrain, keycap, bridge, stair, trees and lamps stay procedural because
+ * they need parameter tuning, not baked detail. */
+export type ObservatoryAssets = {
+  domeEast?: THREE.Object3D;
+  domeWest?: THREE.Object3D;
+  telescopeFork?: THREE.Object3D;
+  telescopeTube?: THREE.Object3D;
+  dutyRoom?: THREE.Object3D;
+};
+
 export type ObservatoryBase = {
   root: THREE.Group;
-  /** Two dome pivots: hinge groups at the spring line, east and west. */
+  /** Two dome pivots: slide groups at the drum axis, east and west. */
   domeHalves: THREE.Group[];
   telescopeFork: THREE.Group;
   telescopeTube: THREE.Group;
   /** Window pane and lamp glass: driven by the duty-room lamp state. */
   windowMaterial: THREE.MeshStandardMaterial;
   lampMaterial: THREE.MeshStandardMaterial;
+  /** Glow materials found on the Blender duty-room asset (QDutyGlow). */
+  glowMaterials: THREE.MeshStandardMaterial[];
+  /** Red apex beacon, pulsed at night. */
+  beaconMaterial: THREE.MeshStandardMaterial;
   lamps: THREE.PointLight[];
   dispose: () => void;
 };
@@ -37,7 +53,7 @@ function material(color: string, roughness: number, metalness = 0) {
   return new THREE.MeshStandardMaterial({ color, roughness, metalness });
 }
 
-export function createObservatoryBase(quality: Quality = 'full'): ObservatoryBase {
+export function createObservatoryBase(quality: Quality = 'full', assets: ObservatoryAssets = {}): ObservatoryBase {
   const root = new THREE.Group();
   root.name = 'ObservatoryStudy';
   root.rotation.y = OBS.rotation;
@@ -191,7 +207,28 @@ export function createObservatoryBase(quality: Quality = 'full'): ObservatoryBas
     const skirt = track(new THREE.CylinderGeometry(drum.radius + .02, drum.radius + .05, .08, 56));
     const footing = add(skirt, m.plasterShadow, 'QDrumFooting');
     footing.position.set(drum.x, .04, drum.z);
+    // A stone string course breaks the plain wall into two registers.
+    const course = track(new THREE.CylinderGeometry(drum.radius + .012, drum.radius + .012, .035, 56));
+    const stringer = add(course, m.plasterShadow, 'QDrumStringCourse');
+    stringer.position.set(drum.x, .20, drum.z);
+    // A weathered plinth band near the ground.
+    const plinth = track(new THREE.CylinderGeometry(drum.radius + .018, drum.radius + .018, .07, 56));
+    const plinthBand = add(plinth, m.plasterShadow, 'QDrumPlinth');
+    plinthBand.position.set(drum.x, .035, drum.z);
   }
+  // A second ring of small windows above the string course, so the drum does not
+  // read as a blank cylinder from the far side.
+  [1.6, 3.2, 4.8].forEach((angle, i) => {
+    const group = new THREE.Group();
+    group.position.set(drum.x + Math.cos(angle) * drum.radius, .42, drum.z + Math.sin(angle) * drum.radius);
+    group.rotation.y = -angle;
+    root.add(group);
+    const frame = put(group, new THREE.BoxGeometry(.014, .10, .12), m.plasterShadow, `QDrumUpperWindow${i}`);
+    frame.position.x = .006;
+    const pane = put(group, new THREE.PlaneGeometry(.07, .06), m.window);
+    pane.position.x = .016;
+    pane.rotation.y = Math.PI / 2;
+  });
   // Door on the rim, facing the bridge.
   const doorAngle = Math.atan2(SITE.bridge.door.z - drum.z, SITE.bridge.door.x - drum.x);
   {
@@ -238,7 +275,9 @@ export function createObservatoryBase(quality: Quality = 'full'): ObservatoryBas
     }
   }
 
-  // Two half-domes, hinged at opposite sides of the spring line.
+  // Two half-domes. When the Blender asset is present the ribbed shell, rivets,
+  // copper seam and lightning rod come from it; otherwise a bare half sphere
+  // stands in. Both halves share the drum axis and slide apart to open.
   const spring = SITE.dome.spring;
   const domeHalves: THREE.Group[] = [];
   for (const side of [1, -1] as const) {
@@ -248,25 +287,25 @@ export function createObservatoryBase(quality: Quality = 'full'): ObservatoryBas
     // shell never leaves the building.
     pivot.position.set(drum.x, spring, drum.z);
     root.add(pivot);
-    const geometry = track(new THREE.SphereGeometry(SITE.dome.radius, 56, 28, 0, Math.PI, 0, Math.PI / 2));
-    const shell = new THREE.Mesh(geometry, own(new THREE.MeshStandardMaterial({
-      color: PALETTE.plaster, roughness: .86, side: THREE.DoubleSide,
-    })));
-    shell.name = side > 0 ? 'QDomeEastShell' : 'QDomeWestShell';
-    shell.castShadow = true; shell.receiveShadow = true;
-    // The half sphere spans z>=0; rotate so the cut plane is x=0, then slide it
-    // back onto the hinge.
-    shell.rotation.y = side * Math.PI / 2;
-    pivot.add(shell);
-    // Copper flashing along the cut edge: a thin half torus pinned to the meridian.
-    const seam = new THREE.Mesh(
-      track(new THREE.TorusGeometry(SITE.dome.radius, .012, 6, 40, Math.PI)),
-      m.copper,
-    );
-    seam.name = side > 0 ? 'QDomeEastSeam' : 'QDomeWestSeam';
-    seam.rotation.set(0, side * Math.PI / 2, 0);
-    seam.castShadow = true;
-    pivot.add(seam);
+    const authored = (side > 0 ? assets.domeEast : assets.domeWest)?.clone(true);
+    if (authored) {
+      authored.name = side > 0 ? 'QDomeEastShell' : 'QDomeWestShell';
+      authored.traverse(object => {
+        if ((object as THREE.Mesh).isMesh) { object.castShadow = true; object.receiveShadow = true; }
+      });
+      // The asset is already a half bowl with its meridian on the world X axis
+      // (Blender X survives the Y-up export), so no rotation is needed here.
+      pivot.add(authored);
+    } else {
+      const geometry = track(new THREE.SphereGeometry(SITE.dome.radius, 56, 28, 0, Math.PI, 0, Math.PI / 2));
+      const shell = new THREE.Mesh(geometry, own(new THREE.MeshStandardMaterial({
+        color: PALETTE.plaster, roughness: .86, side: THREE.DoubleSide,
+      })));
+      shell.name = side > 0 ? 'QDomeEastShell' : 'QDomeWestShell';
+      shell.castShadow = true; shell.receiveShadow = true;
+      shell.rotation.y = side * Math.PI / 2;
+      pivot.add(shell);
+    }
     domeHalves.push(pivot);
   }
 
@@ -275,7 +314,21 @@ export function createObservatoryBase(quality: Quality = 'full'): ObservatoryBas
   fork.name = 'QTelescopeFork';
   fork.position.set(drum.x, 0, drum.z);
   root.add(fork);
-  {
+  const tube = new THREE.Group();
+  tube.name = 'QTelescopeTube';
+  fork.add(tube);
+  if (assets.telescopeFork && assets.telescopeTube) {
+    const authoredFork = assets.telescopeFork.clone(true);
+    authoredFork.traverse(object => { if ((object as THREE.Mesh).isMesh) { object.castShadow = true; object.receiveShadow = true; } });
+    // Blender Z-up / front -Y -> glTF Y-up: the asset's local Z is the scene's Y.
+    authoredFork.rotation.x = -Math.PI / 2;
+    fork.add(authoredFork);
+    const authoredTube = assets.telescopeTube.clone(true);
+    authoredTube.traverse(object => { if ((object as THREE.Mesh).isMesh) { object.castShadow = true; object.receiveShadow = true; } });
+    tube.add(authoredTube);
+    // The tube pivots around the altitude axis; the fork carries azimuth.
+    tube.position.set(0, SITE.telescope.axis, 0);
+  } else {
     const pier = put(fork, new THREE.CylinderGeometry(.13, .17, SITE.telescope.pierTop, 20), m.rock, 'QTelescopePier');
     pier.position.y = SITE.telescope.pierTop / 2 + OBS.pad;
     const head = put(fork, new THREE.CylinderGeometry(.20, .20, .035, 24), m.iron, 'QTelescopeHead');
@@ -287,12 +340,7 @@ export function createObservatoryBase(quality: Quality = 'full'): ObservatoryBas
     const axle = put(fork, new THREE.CylinderGeometry(.022, .022, .40, 10), m.iron);
     axle.rotation.z = Math.PI / 2;
     axle.position.y = SITE.telescope.axis;
-  }
-  const tube = new THREE.Group();
-  tube.name = 'QTelescopeTube';
-  tube.position.set(0, SITE.telescope.axis, 0);
-  fork.add(tube);
-  {
+    tube.position.set(0, SITE.telescope.axis, 0);
     const barrel = put(tube, new THREE.CylinderGeometry(SITE.telescope.tubeRadius, SITE.telescope.tubeRadius, SITE.telescope.tube, 24), m.iron, 'QTelescopeBarrel');
     barrel.rotation.z = Math.PI / 2;
     const collarA = put(tube, new THREE.CylinderGeometry(SITE.telescope.tubeRadius + .012, SITE.telescope.tubeRadius + .012, .03, 24), m.brass);
@@ -308,22 +356,49 @@ export function createObservatoryBase(quality: Quality = 'full'): ObservatoryBas
   }
 
   // ---- duty room --------------------------------------------------------
+  const glowMaterials: THREE.MeshStandardMaterial[] = [];
   {
     const room = new THREE.Group();
     room.name = 'QDutyRoom';
     room.position.set(SITE.duty.x, OBS.pad, SITE.duty.z);
     room.rotation.y = .18;
     root.add(room);
-    const walls = put(room, new THREE.BoxGeometry(SITE.duty.width, SITE.duty.eaves, SITE.duty.depth), m.plaster, 'QDutyWalls');
-    walls.position.y = SITE.duty.eaves / 2;
-    const roofA = put(room, new THREE.BoxGeometry(SITE.duty.width + .06, .022, .22), m.slate);
-    roofA.position.set(0, SITE.duty.eaves + .055, -.105);
-    roofA.rotation.x = -.62;
-    const roofB = roofA.clone(); roofB.position.z = .105; roofB.rotation.x = .62; room.add(roofB);
-    const chimney = put(room, new THREE.BoxGeometry(.06, .20, .06), m.plasterShadow);
-    chimney.position.set(-.13, SITE.duty.eaves + .14, -.06);
-    const pane = put(room, new THREE.PlaneGeometry(.15, .10), m.window, 'QDutyWindow');
-    pane.position.set(.045, .17, SITE.duty.depth / 2 + .001);
+    if (assets.dutyRoom) {
+      const authored = assets.dutyRoom.clone(true);
+      authored.traverse(object => {
+        if (!(object as THREE.Mesh).isMesh) return;
+        object.castShadow = true; object.receiveShadow = true;
+        // The glowing window pane is driven by the lamp state; find it by material.
+        const mat = (object as THREE.Mesh).material as THREE.MeshStandardMaterial | THREE.MeshStandardMaterial[];
+        const list = Array.isArray(mat) ? mat : [mat];
+        list.forEach(material => {
+          if (material && material.name === 'QDutyGlow') {
+            object.userData.glow = true;
+            glowMaterials.push(material);
+          }
+        });
+      });
+      room.add(authored);
+      // Scale to match the duty-room footprint authored in the layout.
+      const targetWidth = SITE.duty.width;
+      const box = new THREE.Box3().setFromObject(authored);
+      const width = box.max.x - box.min.x;
+      const s = width > 0 ? targetWidth / width : 1;
+      authored.scale.setScalar(s);
+      // The asset's base sits at its origin; drop it onto the pad.
+      authored.position.y = OBS.pad;
+    } else {
+      const walls = put(room, new THREE.BoxGeometry(SITE.duty.width, SITE.duty.eaves, SITE.duty.depth), m.plaster, 'QDutyWalls');
+      walls.position.y = SITE.duty.eaves / 2;
+      const roofA = put(room, new THREE.BoxGeometry(SITE.duty.width + .06, .022, .22), m.slate);
+      roofA.position.set(0, SITE.duty.eaves + .055, -.105);
+      roofA.rotation.x = -.62;
+      const roofB = roofA.clone(); roofB.position.z = .105; roofB.rotation.x = .62; room.add(roofB);
+      const chimney = put(room, new THREE.BoxGeometry(.06, .20, .06), m.plasterShadow);
+      chimney.position.set(-.13, SITE.duty.eaves + .14, -.06);
+      const pane = put(room, new THREE.PlaneGeometry(.15, .10), m.window, 'QDutyWindow');
+      pane.position.set(.045, .17, SITE.duty.depth / 2 + .001);
+    }
   }
 
   // ---- bridge -----------------------------------------------------------
@@ -386,6 +461,21 @@ export function createObservatoryBase(quality: Quality = 'full'): ObservatoryBas
       tread.position.set(drum.x + Math.cos(angle) * radius, rise, drum.z + Math.sin(angle) * radius);
       tread.rotation.y = -angle + Math.PI / 2;
     }
+    // A masonry stringer under the treads closes the floating gap and gives the
+    // stair a footing; it hugs the drum wall and steps down with the treads.
+    for (let i = 0; i < steps; i++) {
+      const t = i / steps;
+      const angle = startAngle + sweep * t;
+      const rise = SITE.gallery * (i + 1) / steps;
+      const block = put(stair, new THREE.BoxGeometry(.06, Math.max(.04, rise), .16), m.rock);
+      block.position.set(drum.x + Math.cos(angle) * (radius - width / 2 - .01), rise / 2, drum.z + Math.sin(angle) * (radius - width / 2 - .01));
+      block.rotation.y = -angle + Math.PI / 2;
+    }
+    // A stone landing at the bottom ties the stair to the terrain.
+    const firstAngle = startAngle;
+    const landing = put(stair, new THREE.BoxGeometry(.20, .06, .26), m.bridgeStone);
+    landing.position.set(drum.x + Math.cos(firstAngle) * (radius + .02), .03, drum.z + Math.sin(firstAngle) * (radius + .02));
+    landing.rotation.y = -firstAngle + Math.PI / 2;
     const railPoints: THREE.Vector3[] = [];
     for (let i = 0; i <= steps; i += 2) {
       const t = i / steps;
@@ -439,6 +529,19 @@ export function createObservatoryBase(quality: Quality = 'full'): ObservatoryBas
     }
   }
 
+  // ---- red beacon -------------------------------------------------------
+  // Observatories keep a red light at the apex at night so anyone on the hill
+  // sees the structure without ruining an astronomer's dark adaptation. It is a
+  // separate material so the night cycle can pulse it independently.
+  const beaconMaterial = own(new THREE.MeshStandardMaterial({
+    color: '#4a0f0f', emissive: new THREE.Color('#ff2a1a'), emissiveIntensity: 0, roughness: .4,
+  }));
+  const beacon = add(track(new THREE.SphereGeometry(.022, 10, 8)), beaconMaterial, 'QBeacon');
+  beacon.position.set(drum.x, SITE.dome.spring + SITE.dome.radius + .20, drum.z);
+  const beaconLight = new THREE.PointLight('#ff2a1a', 0, .9, 1.8);
+  beaconLight.position.copy(beacon.position);
+  root.add(beaconLight);
+
   const dispose = () => {
     geometries.forEach(geometry => geometry.dispose());
     materials.forEach(material => material.dispose());
@@ -451,6 +554,8 @@ export function createObservatoryBase(quality: Quality = 'full'): ObservatoryBas
     telescopeTube: tube,
     windowMaterial: m.window,
     lampMaterial: m.lamp,
+    glowMaterials,
+    beaconMaterial,
     lamps,
     dispose,
   };

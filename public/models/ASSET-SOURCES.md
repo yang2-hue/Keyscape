@@ -36,3 +36,10 @@
 - The boat is a static asset animated by the existing app. The dock aligns to the existing shore landing; both are validated against the existing collision bounds.
 
 These assets are integrated with the procedural terrain and dynamic scene. They are not a complete exported island. The six locally authored assets are distributed under the root MIT license; the Poly Haven derivative retains CC0.
+
+## observatory.glb
+
+- Created locally for Keyscape in Blender 5.4.0 Alpha, 2026-10-29; no downloaded geometry or textures.
+- Script: `scripts/blender/author-observatory.py`; editable source and stats: `outputs/art-observatory/` (local).
+- Five named nodes: `DomeEast`, `DomeWest` (ribbed half-shells, base ring on their local origin, meridian on the X axis), `TelescopeFork` (pier + equatorial fork, pier base at origin), `TelescopeTube` (barrel along X, origin at the altitude axis), `DutyRoom` (walls + gable roof + chimney + a `QDutyGlow` window pane).
+- The app slides the two dome halves apart to open them, drives `QDutyGlow` emissive with the lamp state, and rotates the fork (azimuth) and tube (altitude) for the aim presets. Geometry and materials are owned by the shared GLTF cache.

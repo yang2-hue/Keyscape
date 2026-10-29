@@ -1,6 +1,7 @@
 import { Stars } from './LunarStudy';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
+import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { createObservatoryBase, type ObservatoryBase } from './observatory-base';
 import { OBS, SITE, observatoryHeight } from './observatory-layout';
@@ -138,7 +139,22 @@ const AIMS: Aim[] = [
 export default function ObservatoryStudy({ playing, moment }: { playing: boolean; moment: ObservatoryMoment }) {
   const software = useSoftwareRenderer();
   const preset = observatoryPreset(moment);
-  const base = useMemo<ObservatoryBase>(() => createObservatoryBase(software ? 'software' : 'full'), [software]);
+  const gltf = useGLTF(`${import.meta.env.BASE_URL}models/observatory/observatory.glb`);
+  const assets = useMemo(() => {
+    const scene = gltf.scene;
+    const find = (name: string) => scene.getObjectByName(name) ?? undefined;
+    return {
+      domeEast: find('DomeEast'),
+      domeWest: find('DomeWest'),
+      telescopeFork: find('TelescopeFork'),
+      telescopeTube: find('TelescopeTube'),
+      dutyRoom: find('DutyRoom'),
+    };
+  }, [gltf]);
+  const base = useMemo<ObservatoryBase>(
+    () => createObservatoryBase(software ? 'software' : 'full', assets),
+    [software, assets],
+  );
   useEffect(() => () => base.dispose(), [base]);
   const gl = useThree(state => state.gl);
 
@@ -154,6 +170,7 @@ export default function ObservatoryStudy({ playing, moment }: { playing: boolean
   const aimValue = useRef({ altitude: AIMS[0].altitude, azimuth: AIMS[0].azimuth });
   const busy = useRef(0);
   const intent = useRef<'idle' | 'open' | 'close'>('idle');
+  const elapsed = useRef(0);
 
   const toggleDome = useCallback((event?: ThreeEvent<MouseEvent>) => {
     event?.stopPropagation();
@@ -196,6 +213,7 @@ export default function ObservatoryStudy({ playing, moment }: { playing: boolean
       aimValue.current.altitude = THREE.MathUtils.damp(aimValue.current.altitude, AIMS[aim].altitude, 3.4, step);
       aimValue.current.azimuth = THREE.MathUtils.damp(aimValue.current.azimuth, AIMS[aim].azimuth, 3.4, step);
       busy.current = Math.max(0, busy.current - step);
+      elapsed.current += step;
     }
     // The halves part along the slit and lean outward; a rim hinge would swing a
     // quarter sphere clear of the drum and read as a flying shell.
@@ -217,7 +235,19 @@ export default function ObservatoryStudy({ playing, moment }: { playing: boolean
     lampValue.current = THREE.MathUtils.damp(lampValue.current, wantsLamp, 2.2, step);
     base.windowMaterial.emissiveIntensity = .06 + lampValue.current * 2.6;
     base.lampMaterial.emissiveIntensity = lampValue.current * 3.2;
+    // The Blender window pane carries an emission channel baked into QDutyGlow;
+    // drive it directly so the interior reads lit without a second light rig.
+    base.glowMaterials.forEach(material => {
+      material.emissiveIntensity = .15 + lampValue.current * 2.8;
+    });
     base.lamps.forEach(light => { light.intensity = lampValue.current * 1.1; });
+    // The red beacon pulses at night only; slow enough to read as a warning
+    // light, not a disco strobe.
+    const beaconOn = preset.night ? 1 : 0;
+    const pulse = .55 + .45 * Math.sin(elapsed.current * 1.7);
+    base.beaconMaterial.emissiveIntensity = THREE.MathUtils.damp(
+      base.beaconMaterial.emissiveIntensity, beaconOn * (1.6 + pulse * 1.2), 3, step,
+    );
 
     if (import.meta.env.DEV) {
       const d = gl.domElement.dataset;

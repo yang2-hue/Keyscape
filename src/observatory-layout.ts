@@ -81,13 +81,19 @@ export function gorgeDepth(x: number, z: number) {
 export function observatoryHeight(x: number, z: number) {
   const { drum } = SITE;
   let h = OBS.pad;
-  // Rocky shelf rising to the north-west, dropping away to the south.
-  h += 0.085 * smooth(z, -0.45, -1.05) * (0.6 + 0.4 * noise2(x * 2.4 + 3.1, z * 2.4 - 1.9));
-  h -= 0.035 * smooth(z, 0.55, 1.05);
+  // A rocky ridge climbs to the north-west and a lower shelf falls to the
+  // south; the drum sits on a shoulder between them so the world is a hillside,
+  // not a slab.
+  h += 0.16 * smooth(z, -0.30, -1.05) * (0.55 + 0.45 * noise2(x * 1.9 + 3.1, z * 1.9 - 1.9));
+  h += 0.06 * smooth(-x, 0.35, 1.35) * (0.6 + 0.4 * noise2(x * 2.1 - 2.2, z * 2.1 + 4.0));
+  h -= 0.05 * smooth(z, 0.55, 1.05);
+  // Stepped rock ledges on the north face: a couple of shallow terraces break
+  // the long slope into believable strata.
+  h += 0.022 * (0.5 + 0.5 * Math.sin(z * 7.0 + x * 3.0)) * smooth(z, -0.35, -1.0);
   // Grain. Gradient noise only: value noise leaves its lattice on a grazing key.
-  h += 0.016 * (noise2(x * 2.9 + 1.7, z * 2.9 - 2.4) - 0.5);
-  h += 0.009 * (noise2(x * 6.7 - 5.1, z * 6.7 + 3.3) - 0.5);
-  h += 0.004 * (noise2(x * 13.1 + 8.3, z * 13.1 - 6.7) - 0.5);
+  h += 0.018 * (noise2(x * 2.9 + 1.7, z * 2.9 - 2.4) - 0.5);
+  h += 0.010 * (noise2(x * 6.7 - 5.1, z * 6.7 + 3.3) - 0.5);
+  h += 0.005 * (noise2(x * 13.1 + 8.3, z * 13.1 - 6.7) - 0.5);
   // The gorge under the tail.
   h -= gorgeDepth(x, z);
   // Flatten under the building, the duty room and the landing so nothing tilts.
