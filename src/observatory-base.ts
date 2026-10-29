@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { OBS, SITE, bridgePath, observatoryHeight, observatoryInset, observatorySurfaceHeight, outlinePoint } from './observatory-layout';
 import { groundMaps, plasterMaps, plasticGrain, rockGeometry } from './observatory-materials';
+import { createDustLayers, createWindUniforms, windify, type WindUniforms } from './observatory-wind';
 import { noise2 } from './lunar-layout';
 import { seeded } from './coastal-materials';
 
@@ -16,6 +17,10 @@ export type ObservatoryAssets = {
   telescopeFork?: THREE.Object3D;
   telescopeTube?: THREE.Object3D;
   dutyRoom?: THREE.Object3D;
+  /** Blender-authored alpine flora (scripts/blender/author-alpine-flora.py). */
+  tussock?: THREE.Object3D;
+  juniper?: THREE.Object3D;
+  pine?: THREE.Object3D;
 };
 
 export type ObservatoryBase = {
@@ -40,6 +45,10 @@ export type ObservatoryBase = {
   /** The water cistern, drips on click. */
   cistern: THREE.Object3D | null;
   lamps: THREE.PointLight[];
+  /** Terrain mesh, so the dust sheet can reuse its exact surface. */
+  terrain: THREE.Mesh;
+  /** Shared clock and gain for every wind-driven thing on the key. */
+  wind: WindUniforms;
   dispose: () => void;
 };
 
@@ -71,6 +80,8 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
   const geometries: THREE.BufferGeometry[] = [];
   const materials: THREE.Material[] = [];
   const textures: THREE.Texture[] = [];
+  const wind = createWindUniforms();
+  let terrainMesh: THREE.Mesh | null = null;
   const track = <T extends THREE.BufferGeometry>(geometry: T) => { geometries.push(geometry); return geometry; };
   const own = <T extends THREE.Material>(m: T) => { materials.push(m); return m; };
 
@@ -260,6 +271,19 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
     }));
     const terrain = add(plane, terrainMaterial, 'QTerrain');
     terrain.castShadow = false;
+    terrainMesh = terrain;
+  }
+
+  // ---- wind -------------------------------------------------------------
+  // Two layers that share the flora's clock: dust lying on the terrain, and
+  // grit streaking through the air above it. Both are invisible until the wind
+  // moment raises `wind.strength`.
+  if (terrainMesh) {
+    for (const layer of createDustLayers(terrainMesh.geometry, wind, quality)) {
+      textures.push(layer.noise);
+      own(layer.mesh.material as THREE.Material);
+      root.add(layer.mesh);
+    }
   }
 
   // ---- rock field -------------------------------------------------------
@@ -752,72 +776,71 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
     rail.castShadow = false;
   }
 
-  // ---- conifers ---------------------------------------------------------
-  {
-    const random = seeded(771);
-    const spots = [
-      [-1.15, -0.62], [-1.02, 0.18], [0.94, -0.86], [1.16, -0.30], [0.30, -0.92],
-    ];
-    for (const [x, z] of spots) {
-      const tree = new THREE.Group();
-      const h = .20 + random() * .14;
-      tree.position.set(x, observatoryHeight(x, z), z);
-      root.add(tree);
-      const trunk = put(tree, new THREE.CylinderGeometry(.008, .012, h * .45, 6), m.wood);
-      trunk.position.y = h * .22;
-      for (let i = 0; i < 3; i++) {
-        const cone = put(tree, new THREE.ConeGeometry(.075 - i * .018, h * .5, 9), own(material('#2f4030', .9)));
-        cone.position.y = h * (.35 + i * .22);
-      }
+  // ---- flora ------------------------------------------------------------
+  // Instanced Blender geometry. The previous trees were three stacked cones on
+  // a cylinder and the scrub was nine flat quads: next to a dome with real ribs
+  // and ribbed panels they read as origami. Each plant also carries the wind
+  // shader, so the whole hillside leans together when the weather turns.
+  const scattered = (count: number, minInset: number, seed: number, reject?: (x: number, z: number) => boolean) => {
+    const random = seeded(seed);
+    const spots: { x: number; z: number; yaw: number; scale: number }[] = [];
+    let guard = 0;
+    while (spots.length < count && guard++ < count * 40) {
+      const x = (random() - .5) * (OBS.halfWidth * 2 - .10);
+      const z = (random() - .5) * (OBS.halfDepth * 2 - .09);
+      if (observatoryInset(x, z) < minInset) continue;
+      if (Math.hypot(x - SITE.drum.x, z - SITE.drum.z) < SITE.drum.radius * 1.015) continue;
+      if (Math.abs(x - (SITE.bridge.door.x + SITE.bridge.landing.x) / 2) < .22
+        && Math.abs(z - (SITE.bridge.door.z + SITE.bridge.landing.z) / 2) < .20) continue;
+      if (Math.abs(x - SITE.duty.x) < .24 && Math.abs(z - SITE.duty.z) < .22) continue;
+      if (reject?.(x, z)) continue;
+      spots.push({ x, z, yaw: random() * Math.PI * 2, scale: .78 + random() * .44 });
     }
-  }
+    return spots;
+  };
 
-  // ---- ground scrub -----------------------------------------------------
-  // Tussocks of dry grass and low moss break the bare rock and sell the 'empty
-  // hill station' feel without cluttering the access paths.
-  {
-    const random = seeded(2026102902);
-    const tuftGeometry = (() => {
-      // A small clump of tapered blades, the same cheap approach as the olive
-      // foliage: thin cards beat blobs at this scale.
-      const blades = 9;
-      const pos: number[] = [], idx: number[] = [];
-      for (let b = 0; b < blades; b++) {
-        const a = random() * Math.PI * 2;
-        const h = .04 + random() * .06;
-        const w = .008 + random() * .006;
-        const dx = Math.cos(a), dz = Math.sin(a), sx = -dz, sz = dx;
-        const base = pos.length / 3;
-        for (let s = 0; s < 2; s++) {
-          const t = s;
-          pos.push(dx * t * h * .6 + sx * w, t * h, dz * t * h * .6 + sz * w);
-          pos.push(dx * t * h * .6 - sx * w, t * h, dz * t * h * .6 - sz * w);
-        }
-        idx.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
-      }
-      const g = new THREE.BufferGeometry();
-      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-      g.setIndex(idx);
-      g.computeVertexNormals();
-      return g;
-    })();
-    const grassMat = own(material('#5e6349', .95));
-    const mossMat = own(material('#4e5340', .98));
-    const n = quality === 'full' ? 120 : 50;
-    for (let i = 0; i < n; i++) {
-      const x = (random() - .5) * (OBS.halfWidth * 2 - .3);
-      const z = (random() - .5) * (OBS.halfDepth * 2 - .26);
-      if (Math.hypot(x - SITE.drum.x, z - SITE.drum.z) < SITE.drum.radius * 1.02) continue;
-      if (Math.abs(x - SITE.bridge.door.x) < .3 && Math.abs(z - SITE.bridge.door.z) < .3) continue;
-      const tuft = new THREE.Mesh(tuftGeometry, random() < .5 ? grassMat : mossMat);
-      tuft.position.set(x, observatoryHeight(x, z), z);
-      tuft.rotation.y = random() * Math.PI * 2;
-      const s = .5 + random() * 1.1;
-      tuft.scale.setScalar(s);
-      tuft.castShadow = true;
-      root.add(tuft);
+  const instanceFlora = (source: THREE.Object3D | undefined, spots: { x: number; z: number; yaw: number; scale: number }[], name: string, trunkFree = true) => {
+    if (!source || !spots.length) return 0;
+    source.updateMatrixWorld(true);
+    const toLocal = new THREE.Matrix4().copy(source.matrixWorld).invert();
+    const meshes: THREE.Mesh[] = [];
+    source.traverse(object => { if ((object as THREE.Mesh).isMesh) meshes.push(object as THREE.Mesh); });
+    const matrix = new THREE.Matrix4(), local = new THREE.Matrix4();
+    const placement = new THREE.Matrix4(), quat = new THREE.Quaternion(), offset = new THREE.Vector3(), scale = new THREE.Vector3();
+    for (const mesh of meshes) {
+      local.multiplyMatrices(toLocal, mesh.matrixWorld);
+      // Sway is measured against the plant's own height, so the shader needs it;
+      // the bounding box is the cheapest honest answer.
+      mesh.geometry.computeBoundingBox();
+      const height = Math.max(.02, mesh.geometry.boundingBox!.max.y);
+      const material = windify(mesh.material as THREE.Material, wind, height);
+      own(material);
+      const instanced = new THREE.InstancedMesh(track(mesh.geometry), material, spots.length);
+      instanced.name = `${name}${meshes.indexOf(mesh)}`;
+      instanced.castShadow = trunkFree;
+      instanced.receiveShadow = true;
+      spots.forEach((spot, i) => {
+        quat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), spot.yaw);
+        offset.set(spot.x, observatorySurfaceHeight(spot.x, spot.z) - .004, spot.z);
+        scale.setScalar(spot.scale);
+        placement.compose(offset, quat, scale);
+        matrix.multiplyMatrices(placement, local);
+        instanced.setMatrixAt(i, matrix);
+      });
+      instanced.instanceMatrix.needsUpdate = true;
+      root.add(instanced);
     }
-  }
+    return spots.length;
+  };
+
+  const pineSpots = [
+    { x: -1.18, z: -0.58, yaw: .4, scale: .95 }, { x: -1.02, z: 0.22, yaw: 2.1, scale: .78 },
+    { x: 0.92, z: -0.86, yaw: 1.2, scale: 1.0 }, { x: 1.16, z: -0.28, yaw: 3.4, scale: .72 },
+    { x: 0.26, z: -0.94, yaw: 5.0, scale: .86 }, { x: -1.24, z: -0.14, yaw: 4.2, scale: .66 },
+  ];
+  instanceFlora(assets.pine, pineSpots, 'QPine');
+  instanceFlora(assets.juniper, scattered(quality === 'full' ? 22 : 9, .05, 2026102961), 'QJuniper');
+  instanceFlora(assets.tussock, scattered(quality === 'full' ? 110 : 40, .04, 2026102902), 'QTussock');
 
   // ---- abandoned props --------------------------------------------------
   // A few weathered objects that make the site read as 'left behind', not
@@ -951,6 +974,8 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
     barrel: barrelRef,
     cistern: cisternRef,
     lamps,
+    terrain: terrainMesh!,
+    wind,
     dispose,
   };
 }

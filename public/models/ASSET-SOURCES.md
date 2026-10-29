@@ -43,3 +43,11 @@ These assets are integrated with the procedural terrain and dynamic scene. They 
 - Script: `scripts/blender/author-observatory.py`; editable source and stats: `outputs/art-observatory/` (local).
 - Five named nodes: `DomeEast`, `DomeWest` (ribbed half-shells, base ring on their local origin, meridian on the X axis), `TelescopeFork` (pier + equatorial fork, pier base at origin), `TelescopeTube` (barrel along X, origin at the altitude axis), `DutyRoom` (walls + gable roof + chimney + a `QDutyGlow` window pane).
 - The app slides the two dome halves apart to open them, drives `QDutyGlow` emissive with the lamp state, and rotates the fork (azimuth) and tube (altitude) for the aim presets. Geometry and materials are owned by the shared GLTF cache.
+
+## alpine-flora.glb
+
+- Created locally for Keyscape in Blender 5.4.0 Alpha, 2026-10-29; no downloaded geometry or textures.
+- Script: `scripts/blender/author-alpine-flora.py`; editable source and mesh report: `outputs/art-q-flora/` (local).
+- Three objects, base at the origin, Z up, study units: `Tussock` (a dry grass clump, 1,056 triangles), `Juniper` (a prostrate shrub, 540 triangles), `Pine` (a wind-shaped conifer, 1,736 triangles).
+- Replaced nine flat quads per grass clump and three stacked cones per tree on the Q hillside. The app instances each object with an `InstancedMesh` and bends it with the shared wind shader, which reads local Y, so the origin at the base is what keeps the plant planted.
+- Geometry and materials are owned by the shared GLTF cache; the wind shader is applied to per-instance clones of the materials.

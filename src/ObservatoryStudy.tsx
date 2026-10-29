@@ -6,7 +6,6 @@ import * as THREE from 'three';
 import { createObservatoryBase, type ObservatoryBase } from './observatory-base';
 import { OBS, SITE, observatoryHeight } from './observatory-layout';
 import { OBSERVATORY_MOMENTS, observatoryPreset, type ObservatoryMoment } from './observatory-weather';
-import { seeded } from './coastal-materials';
 import { useSoftwareRenderer } from './studio';
 
 /** Same rig as the lunar study, with its own presets: a hill station gets a blue
@@ -75,60 +74,6 @@ export function ObservatoryAtmosphere({ moment }: { moment: ObservatoryMoment })
   </>;
 }
 
-/** Airborne grit. Same pixel-sized points as the lunar dust, but it drifts on a
- * slow wind and only exists in the `wind` moment. */
-function Grit({ level }: { level: number }) {
-  const points = useRef<THREE.Points>(null);
-  const gl = useThree(state => state.gl);
-  const field = useMemo(() => {
-    const count = 260;
-    const positions = new Float32Array(count * 3);
-    const phases = new Float32Array(count);
-    const random = seeded(20261029);
-    for (let i = 0; i < count; i++) {
-      const x = (random() - .5) * 3.2;
-      const z = (random() - .5) * 2.5;
-      positions[i * 3] = x;
-      positions[i * 3 + 1] = observatoryHeight(x, z) + .04 + random() * .5;
-      positions[i * 3 + 2] = z;
-      phases[i] = random();
-    }
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geometry.setAttribute('aPhase', new THREE.BufferAttribute(phases, 1));
-    const uniforms = { uOpacity: { value: 0 }, uTime: { value: 0 }, uPixelRatio: { value: 1 } };
-    const material = new THREE.ShaderMaterial({
-      uniforms, transparent: true, depthWrite: false,
-      vertexShader: `
-        attribute float aPhase;
-        uniform float uTime; uniform float uPixelRatio;
-        void main(){
-          vec3 p=position;
-          p.x=mod(p.x+uTime*(0.06+aPhase*.05)+1.7,3.4)-1.7;
-          p.y+=sin(uTime*.9+aPhase*6.28)*.02;
-          gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.0);
-          gl_PointSize=max(1.0,(1.1+aPhase*1.4)*uPixelRatio);
-        }`,
-      fragmentShader: `
-        uniform float uOpacity;
-        void main(){
-          float r=length(gl_PointCoord-.5);
-          if(r>.5)discard;
-          gl_FragColor=vec4(vec3(.82,.78,.68),uOpacity*(1.0-smoothstep(.1,.5,r))*.55);
-        }`,
-    });
-    return { geometry, material, uniforms };
-  }, []);
-  useEffect(() => () => { field.geometry.dispose(); field.material.dispose(); }, [field]);
-  useFrame((_, dt) => {
-    const step = Math.min(dt, .05);
-    field.uniforms.uOpacity.value = THREE.MathUtils.damp(field.uniforms.uOpacity.value, level, 2.4, step);
-    field.uniforms.uTime.value += step;
-    field.uniforms.uPixelRatio.value = gl.getPixelRatio();
-  });
-  return <points ref={points} geometry={field.geometry} material={field.material} frustumCulled={false} />;
-}
-
 type Aim = { altitude: number; azimuth: number };
 const AIMS: Aim[] = [
   { altitude: 1.32, azimuth: 0.55 },   // near zenith, slit open
@@ -140,17 +85,20 @@ export default function ObservatoryStudy({ playing, moment }: { playing: boolean
   const software = useSoftwareRenderer();
   const preset = observatoryPreset(moment);
   const gltf = useGLTF(`${import.meta.env.BASE_URL}models/observatory/observatory.glb`);
+  const flora = useGLTF(`${import.meta.env.BASE_URL}models/alpine-flora/alpine-flora.glb`);
   const assets = useMemo(() => {
-    const scene = gltf.scene;
-    const find = (name: string) => scene.getObjectByName(name) ?? undefined;
+    const find = (scene: THREE.Object3D, name: string) => scene.getObjectByName(name) ?? undefined;
     return {
-      domeEast: find('DomeEast'),
-      domeWest: find('DomeWest'),
-      telescopeFork: find('TelescopeFork'),
-      telescopeTube: find('TelescopeTube'),
-      dutyRoom: find('DutyRoom'),
+      domeEast: find(gltf.scene, 'DomeEast'),
+      domeWest: find(gltf.scene, 'DomeWest'),
+      telescopeFork: find(gltf.scene, 'TelescopeFork'),
+      telescopeTube: find(gltf.scene, 'TelescopeTube'),
+      dutyRoom: find(gltf.scene, 'DutyRoom'),
+      tussock: find(flora.scene, 'Tussock'),
+      juniper: find(flora.scene, 'Juniper'),
+      pine: find(flora.scene, 'Pine'),
     };
-  }, [gltf]);
+  }, [gltf, flora]);
   const base = useMemo<ObservatoryBase>(
     () => createObservatoryBase(software ? 'software' : 'full', assets),
     [software, assets],
@@ -173,6 +121,8 @@ export default function ObservatoryStudy({ playing, moment }: { playing: boolean
   const busy = useRef(0);
   const intent = useRef<'idle' | 'open' | 'close'>('idle');
   const elapsed = useRef(0);
+  const windTime = useRef(0);
+  const windLevel = useRef(0);
 
   const toggleDome = useCallback((event?: ThreeEvent<MouseEvent>) => {
     event?.stopPropagation();
@@ -235,6 +185,10 @@ export default function ObservatoryStudy({ playing, moment }: { playing: boolean
   useFrame((_, dt) => {
     const step = Math.min(dt, .05);
     const active = playing&&!document.hidden ? 1 : 0;
+    // One clock for the whole key: grass, dust sheet and grit all read it, so
+    // they can never drift out of phase with each other.
+    if (active) windTime.current += step;
+    base.wind.time.value = windTime.current;
     if(active)signal.current=Math.max(0,signal.current-step);
     if (active) {
       open.current = THREE.MathUtils.damp(open.current, openTarget.current, 1.15, step);
@@ -306,6 +260,14 @@ export default function ObservatoryStudy({ playing, moment }: { playing: boolean
       base.barrel.rotation.z = .12 + barrelTilt.current;
       base.barrel.position.y = .06 + barrelTilt.current * .02;
     }
+    // Wind: a hard gale in the wind moment, and a light breeze the rest of the
+    // time so the hillside is never completely dead. The gust term is what makes
+    // it read as weather rather than as an animation loop.
+    const windTarget = moment === 'wind' ? .96 : .13;
+    windLevel.current = THREE.MathUtils.damp(windLevel.current, windTarget, 1.6, active ? step : 0);
+    const gust = .72 + .28 * Math.sin(windTime.current * .53) + .12 * Math.sin(windTime.current * 1.31);
+    base.wind.strength.value = windLevel.current * gust;
+
     // The interior light flickers faintly: a still-powered lamp with a dying
     // connection. It only shows after dark, and only a few percent.
     if (lampValue.current > .3 && preset.night) {
@@ -346,6 +308,8 @@ export default function ObservatoryStudy({ playing, moment }: { playing: boolean
       toggleBarrel: () => toggleBarrel(),
       landmarks: { drum: SITE.drum, bridge: SITE.bridge, domeSpring: SITE.dome.spring, gallery: SITE.gallery },
       setOpen: (value: number) => { openTarget.current = value; intent.current = value > .5 ? 'open' : 'close'; },
+      /** Freeze the wind clock so a capture harness can compare two moments. */
+      setWind: (seconds: number) => { windTime.current = seconds; },
     };
     return () => { delete debug.__observatory; };
   }, [toggleDome, toggleLamp, cycleAim, startSweep, toggleBarrel, lamp, aim]);
@@ -364,7 +328,6 @@ export default function ObservatoryStudy({ playing, moment }: { playing: boolean
       if ((event.object as THREE.Mesh).userData.click) gl.domElement.style.cursor = 'pointer';
     }} onPointerOut={() => { gl.domElement.style.cursor = ''; }} />
     <group visible={preset.stars>0}><Stars level={preset.stars} /></group>
-    <group visible={moment==='wind'}><Grit level={moment==='wind'?preset.dust:0} /></group>
   </>;
 }
 

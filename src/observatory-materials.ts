@@ -381,3 +381,21 @@ export function rockGeometry(seed: number, quality: 'full' | 'software' = 'full'
   geometry.computeVertexNormals();
   return geometry;
 }
+
+/** Seamless fbm for the blown-dust sheet. Sampled with a scrolling UV in the
+ * shader, so it has to tile exactly or the dust shows a seam as it crosses the
+ * key — the same periodicity rule the ground maps follow. */
+export function windNoise(size = 256, cells = 6, octaves = 4, seed = 881) {
+  const data = new Uint8ClampedArray(size * size * 4);
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const n = fbm(x / size, y / size, cells, octaves, seed);
+    const value = Math.max(0, Math.min(255, n * 255));
+    const o = (y * size + x) * 4;
+    data[o] = data[o + 1] = data[o + 2] = value;
+    data[o + 3] = 255;
+  }
+  const texture = new THREE.CanvasTexture(canvasFrom(data, size));
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.anisotropy = 4;
+  return texture;
+}
