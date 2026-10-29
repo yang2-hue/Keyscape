@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OBS, SITE, bridgePath, observatoryHeight, observatoryInset, observatorySurfaceHeight, outlinePoint } from './observatory-layout';
-import { groundMaps, plasticGrain, rockGeometry } from './observatory-materials';
+import { groundMaps, plasterMaps, plasticGrain, rockGeometry } from './observatory-materials';
 import { noise2 } from './lunar-layout';
 import { seeded } from './coastal-materials';
 
@@ -29,8 +29,12 @@ export type ObservatoryBase = {
   lampMaterial: THREE.MeshStandardMaterial;
   /** Glow materials found on the Blender duty-room asset (QDutyGlow). */
   glowMaterials: THREE.MeshStandardMaterial[];
-  /** Red apex beacon, pulsed at night. */
+  /** Red apex beacon, pulsed at night. It rides the closed dome, so the frame
+   * loop hides it while the shell is open — a lamp floating over an empty slit
+   * is the first thing the eye finds. */
   beaconMaterial: THREE.MeshStandardMaterial;
+  beacon: THREE.Object3D;
+  beaconLight: THREE.PointLight;
   /** The rusted barrel, toppled on click. */
   barrel: THREE.Object3D | null;
   /** The water cistern, drips on click. */
@@ -99,6 +103,16 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
     stone.normalScale = new THREE.Vector2(.85, .85);
     stone.roughness = .92;
   }
+  // The drum is the biggest surface on the key, so it gets its own render maps;
+  // the trim bands reuse the normal at a tighter repeat instead of a second bake.
+  const plaster = plasterMaps(quality);
+  textures.push(plaster.map, plaster.normal, plaster.rough);
+  const trimGrain = plaster.normal.clone();
+  trimGrain.repeat.set(6, 6);
+  trimGrain.needsUpdate = true;
+  textures.push(trimGrain);
+  m.plasterShadow.normalMap = trimGrain;
+  m.plasterShadow.normalScale = new THREE.Vector2(.6, .6);
 
   const add = (geometry: THREE.BufferGeometry, material: THREE.Material, name?: string) => {
     track(geometry);
@@ -348,7 +362,11 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
   {
     const wall = track(new THREE.CylinderGeometry(drum.radius, drum.radius, drum.eaves, 56, 1, true));
     const shell = add(wall, m.plaster, 'QDrum');
-    shell.material = own(new THREE.MeshStandardMaterial({ color: PALETTE.plaster, roughness: .88, side: THREE.DoubleSide }));
+    shell.material = own(new THREE.MeshStandardMaterial({
+      color: '#ffffff', roughness: 1, side: THREE.DoubleSide,
+      map: plaster.map, normalMap: plaster.normal, normalScale: new THREE.Vector2(.6, .6),
+      roughnessMap: plaster.rough,
+    }));
     shell.position.set(drum.x, drum.eaves / 2, drum.z);
     // Cornice: a proud band at the eaves, the domes need something to sit on.
     const cornice = track(new THREE.CylinderGeometry(drum.radius + .035, drum.radius + .035, .055, 56));
@@ -367,6 +385,48 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
     const plinthBand = add(plinth, m.plasterShadow, 'QDrumPlinth');
     plinthBand.position.set(drum.x, .035, drum.z);
   }
+  // ---- openings ---------------------------------------------------------
+  // A window is a hole with a wall around it, and the old ones were a glowing
+  // rectangle laid flat on the plaster. Every opening here is therefore built
+  // the same way: a dark reveal sunk behind the surface, glass at its back, a
+  // mullion cross, a proud surround, and a sill with a drip. Depth is the whole
+  // trick — a flat panel has no depth, so it reads as a decal at any distance.
+  const dark = own(material('#241f19', .96));
+  /** Local frame: +x points out of the wall, y is up, z runs along the wall. */
+  const opening = (parent: THREE.Object3D, w: number, h: number, name: string, glass = m.window) => {
+    // Everything sits *outside* the wall plane. The drum is a closed cylinder,
+    // so a recess dug inward is simply hidden by the shell and the only thing
+    // that ever showed was the emissive pane — which is exactly why these read
+    // as glowing stickers. Depth has to be built outward instead: a dark back
+    // plate flush to the plaster, then glass, mullions and a proud surround.
+    const back = put(parent, new THREE.BoxGeometry(.006, h + .004, w + .004), dark, `${name}Back`);
+    back.position.x = .002;
+    back.castShadow = false;
+    const pane = put(parent, new THREE.BoxGeometry(.006, h, w), glass, `${name}Glass`);
+    pane.position.x = .006;
+    // Mullions: one upright, one transom. Two bars turn a bright rectangle into
+    // a window at a glance, even when the pane is only ten pixels wide.
+    const upright = put(parent, new THREE.BoxGeometry(.010, h, .011), m.plasterShadow);
+    upright.position.x = .010;
+    const transom = put(parent, new THREE.BoxGeometry(.010, .011, w), m.plasterShadow);
+    transom.position.set(.010, h * .10, 0);
+    const jamb = .016;
+    const bars: [number, number, number, number][] = [
+      [(h + jamb) / 2, w + jamb * 2, jamb, 0],
+      [-(h + jamb) / 2, w + jamb * 2, jamb, 0],
+      [0, jamb, h, -(w + jamb) / 2],
+      [0, jamb, h, (w + jamb) / 2],
+    ];
+    for (const [y, bw, bh, z] of bars) {
+      const bar = put(parent, new THREE.BoxGeometry(.024, bh, bw), m.plasterShadow);
+      bar.position.set(.012, y, z);
+    }
+    const sill = put(parent, new THREE.BoxGeometry(.058, .015, w + jamb * 2.4), m.plasterShadow);
+    sill.position.set(.026, -(h + jamb) / 2 - .005, 0);
+    sill.rotation.z = -.1;
+    return pane;
+  };
+
   // A second ring of small windows above the string course, so the drum does not
   // read as a blank cylinder from the far side.
   [1.6, 3.2, 4.8].forEach((angle, i) => {
@@ -374,11 +434,7 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
     group.position.set(drum.x + Math.cos(angle) * drum.radius, .42, drum.z + Math.sin(angle) * drum.radius);
     group.rotation.y = -angle;
     root.add(group);
-    const frame = put(group, new THREE.BoxGeometry(.014, .10, .12), m.plasterShadow, `QDrumUpperWindow${i}`);
-    frame.position.x = .006;
-    const pane = put(group, new THREE.PlaneGeometry(.07, .06), m.window);
-    pane.position.x = .016;
-    pane.rotation.y = Math.PI / 2;
+    opening(group, .10, .085, `QDrumUpperWindow${i}`);
   });
   // Door on the rim, facing the bridge.
   const doorAngle = Math.atan2(SITE.bridge.door.z - drum.z, SITE.bridge.door.x - drum.x);
@@ -388,13 +444,30 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
     door.position.set(drum.x + Math.cos(doorAngle) * drum.radius, 0, drum.z + Math.sin(doorAngle) * drum.radius);
     door.rotation.y = -doorAngle;
     root.add(door);
-    const frame = put(door, new THREE.BoxGeometry(.025, .30, .24), m.plasterShadow, 'QDoorFrame');
-    frame.position.set(0, .15, 0);
-    const leaf = put(door, new THREE.BoxGeometry(.02, .26, .19), m.wood, 'QDoorLeaf');
-    leaf.position.set(.012, .14, 0);
-    const glass = put(door, new THREE.PlaneGeometry(.13, .07), m.window, 'QDoorGlass');
-    glass.position.set(.026, .225, 0);
-    glass.rotation.y = Math.PI / 2;
+    // Same construction as the windows: everything outside the wall plane, so
+    // the leaf, the panels and the glazed top light are actually in front of the
+    // plaster instead of buried behind it.
+    const jamb = .02;
+    for (const [y, w, h, z] of [
+      [.276, .20 + jamb * 2, jamb, 0], [-.004, .20 + jamb * 2, jamb, 0],
+      [.136, jamb, .284, -(0.20 + jamb) / 2], [.136, jamb, .284, (0.20 + jamb) / 2],
+    ] as const) {
+      const bar = put(door, new THREE.BoxGeometry(.026, h, w), m.plasterShadow);
+      bar.position.set(.013, y, z);
+    }
+    const threshold = put(door, new THREE.BoxGeometry(.008, .262, .192), dark, 'QDoorThreshold');
+    threshold.position.set(.002, .133, 0);
+    threshold.castShadow = false;
+    const leaf = put(door, new THREE.BoxGeometry(.016, .256, .186), m.wood, 'QDoorLeaf');
+    leaf.position.set(.004, .131, 0);
+    const glass = put(door, new THREE.BoxGeometry(.006, .060, .110), m.window, 'QDoorGlass');
+    glass.position.set(.014, .212, 0);
+    for (const y of [.072, .150]) {
+      const panel = put(door, new THREE.BoxGeometry(.006, .048, .118), m.wood, `QDoorPanel${y}`);
+      panel.position.set(.013, y, 0);
+    }
+    const step = put(door, new THREE.BoxGeometry(.09, .022, .27), m.plasterShadow);
+    step.position.set(.028, -.012, 0);
   }
   // Three shuttered windows around the drum.
   [0.9, 2.4, 4.1].forEach((angle, i) => {
@@ -402,10 +475,19 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
     group.position.set(drum.x + Math.cos(angle) * drum.radius, .34, drum.z + Math.sin(angle) * drum.radius);
     group.rotation.y = -angle;
     root.add(group);
-    const shutter = put(group, new THREE.BoxGeometry(.016, .17, .15), i === 1 ? m.window : m.plasterShadow, `QDrumWindow${i}`);
-    shutter.position.x = .006;
-    const sill = put(group, new THREE.BoxGeometry(.05, .02, .18), m.plasterShadow);
-    sill.position.set(.012, -.093, 0);
+    const pane = opening(group, .15, .17, `QDrumWindow${i}`);
+    // Two of the three are dark and one is boarded: a row of identically lit
+    // holes would read as a lit building, and this one has been empty for years.
+    // The lit one is at 0.9 rad because that face turns toward the gallery
+    // camera — the previous choice put the only warm window on the far side.
+    if (i !== 0) {
+      pane.material = dark;
+      if (i === 2) {
+        const board = put(group, new THREE.BoxGeometry(.014, .075, .21), m.wood, 'QDrumWindowBoard');
+        board.position.set(.014, .022, 0);
+        board.rotation.x = .11;
+      }
+    }
   });
 
   // ---- gallery and dome -------------------------------------------------
@@ -633,23 +715,23 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
     stair.name = 'QStair';
     root.add(stair);
     const { startAngle, sweep, steps, width, radius } = SITE.stair;
+    // Each step is a solid block of stone standing on the ground, not a slab
+    // floating at its own height. The old version hung ten thin treads with a
+    // narrow stringer behind them and the gaps between read as a broken ladder.
+    // Solid risers also give the drum a visible buttress from the gallery angle.
     for (let i = 0; i < steps; i++) {
-      const t = i / steps;
-      const angle = startAngle + sweep * t;
-      const rise = SITE.gallery * (i + 1) / steps;
-      const tread = put(stair, new THREE.BoxGeometry(width, .035, .20), m.rock);
-      tread.position.set(drum.x + Math.cos(angle) * radius, rise, drum.z + Math.sin(angle) * radius);
+      const angle = startAngle + sweep * ((i + .5) / steps);
+      const top = SITE.gallery * (i + 1) / steps;
+      const cx = drum.x + Math.cos(angle) * radius;
+      const cz = drum.z + Math.sin(angle) * radius;
+      const body = put(stair, new THREE.BoxGeometry(width, top - .026, .13), m.rock);
+      body.position.set(cx, (top - .026) / 2, cz);
+      body.rotation.y = -angle + Math.PI / 2;
+      // A pale tread and a nosing that oversails the riser: the shadow under it
+      // is what makes a step read as a step at gallery distance.
+      const tread = put(stair, new THREE.BoxGeometry(width + .016, .026, .144), m.bridgeStone);
+      tread.position.set(cx, top - .013, cz);
       tread.rotation.y = -angle + Math.PI / 2;
-    }
-    // A masonry stringer under the treads closes the floating gap and gives the
-    // stair a footing; it hugs the drum wall and steps down with the treads.
-    for (let i = 0; i < steps; i++) {
-      const t = i / steps;
-      const angle = startAngle + sweep * t;
-      const rise = SITE.gallery * (i + 1) / steps;
-      const block = put(stair, new THREE.BoxGeometry(.06, Math.max(.04, rise), .16), m.rock);
-      block.position.set(drum.x + Math.cos(angle) * (radius - width / 2 - .01), rise / 2, drum.z + Math.sin(angle) * (radius - width / 2 - .01));
-      block.rotation.y = -angle + Math.PI / 2;
     }
     // A stone landing at the bottom ties the stair to the terrain.
     const firstAngle = startAngle;
@@ -759,7 +841,9 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
     box('QCrateB', SITE.duty.x + .34, SITE.duty.z - .05, .08, .05, .08, m.wood, 1.1);
     // A rusted barrel by the stair base.
     barrelRef = put(root, new THREE.CylinderGeometry(.05, .05, .12, 12), m.iron, 'QBarrel');
-    barrelRef.position.set(SITE.drum.x - .60, .06, SITE.drum.z + .72);
+    // Clear of the stair: the solid risers now occupy the old spot and the
+    // barrel ended up embedded in the bottom steps.
+    barrelRef.position.set(1.06, .06, .26);
     barrelRef.rotation.z = .12;
     barrelRef.castShadow = true;
     // A coil of cable and a leaning rack near the bridge door.
@@ -841,7 +925,8 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
     color: '#4a0f0f', emissive: new THREE.Color('#ff2a1a'), emissiveIntensity: 0, roughness: .4,
   }));
   const beacon = add(track(new THREE.SphereGeometry(.022, 10, 8)), beaconMaterial, 'QBeacon');
-  beacon.position.set(drum.x, SITE.dome.spring + SITE.dome.radius + .20, drum.z);
+  // Sits on the lightning-rod tip, not floating above it.
+  beacon.position.set(drum.x, SITE.dome.spring + SITE.dome.radius + .185, drum.z);
   const beaconLight = new THREE.PointLight('#ff2a1a', 0, .9, 1.8);
   beaconLight.position.copy(beacon.position);
   root.add(beaconLight);
@@ -861,6 +946,8 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
     lampMaterial: m.lamp,
     glowMaterials,
     beaconMaterial,
+    beacon,
+    beaconLight,
     barrel: barrelRef,
     cistern: cisternRef,
     lamps,

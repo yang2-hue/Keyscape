@@ -260,7 +260,9 @@ export default function ObservatoryStudy({ playing, moment }: { playing: boolean
     // observatory with a warm window at dusk is the whole point of the piece.
     const wantsLamp = lamp ? 1 : preset.night ? .9 : preset.id === 'dusk' ? .65 : .12;
     lampValue.current = THREE.MathUtils.damp(lampValue.current, wantsLamp, 2.2, step);
-    base.windowMaterial.emissiveIntensity = .06 + lampValue.current * 2.6;
+    // A window is glass with a lamp behind it, not a lightbox: past about 1.2 the
+    // emissive clips to flat yellow and the mullions disappear into it.
+    base.windowMaterial.emissiveIntensity = .05 + lampValue.current * 1.15;
     const pathLevel=pathLit.current===null?lampValue.current:pathLit.current?1:0;
     base.lampMaterial.emissiveIntensity=pathLevel*3.2;
     // The Blender window pane carries an emission channel baked into QDutyGlow;
@@ -270,11 +272,16 @@ export default function ObservatoryStudy({ playing, moment }: { playing: boolean
     });
     base.lamps.forEach(light => { light.intensity = pathLevel * 1.1; });
     // The red beacon pulses at night only; slow enough to read as a warning
-    // light, not a disco strobe.
+    // light, not a disco strobe. It is mounted on the dome apex, so it goes
+    // with the shell: with the slit open there is nothing under it to stand on.
+    const beaconSeated = 1 - THREE.MathUtils.clamp(open.current * 1.6, 0, 1);
+    base.beacon.visible = beaconSeated > .02;
+    base.beaconLight.visible = base.beacon.visible;
+    base.beacon.scale.setScalar(.6 + beaconSeated * .4);
     const beaconOn = preset.night ? 1 : 0;
     const pulse = .55 + .45 * Math.sin(elapsed.current * 1.7);
     base.beaconMaterial.emissiveIntensity = THREE.MathUtils.damp(
-      base.beaconMaterial.emissiveIntensity, signal.current>0?(Math.sin(signal.current*Math.PI*2)>0?5:0):beaconOn * (1.6 + pulse * 1.2), 8, active?step:0,
+      base.beaconMaterial.emissiveIntensity, signal.current>0?(Math.sin(signal.current*Math.PI*2)>0?5:0):beaconOn * (1.6 + pulse * 1.2) * beaconSeated, 8, active?step:0,
     );
     // A search sweep overrides the aim preset: pan smoothly through a wide
     // azimuth while the tube rides a slow sine, then release back to the preset.

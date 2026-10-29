@@ -234,8 +234,13 @@ def dome_half(side):
     # each built as a few long segments laid along the meridian tangent. A rib
     # sticks out radially by ~0.012 and runs the full length of the meridian so
     # the dome reads as a real ribbed shell, not a plain hemisphere.
+    # The west half keeps x <= 0, so its meridian range is (pi/2, 3pi/2). Reusing
+    # the east range here put every west rib and rivet on the far side of the
+    # dome: they stayed hidden while the shell was shut and appeared as a drift
+    # of loose plates the moment it slid open.
+    phi0 = -math.pi / 2 if side > 0 else math.pi / 2
     for i in range(1, 7):
-        phi = -math.pi / 2 + math.pi * (i / 7)
+        phi = phi0 + math.pi * (i / 7)
         for k in range(6):
             t0 = (k) / 6 * (math.pi / 2)
             t1 = (k + 1) / 6 * (math.pi / 2)
@@ -249,12 +254,16 @@ def dome_half(side):
                 -math.sin(tm),
             )
             normal = (math.sin(tm) * math.cos(phi), math.sin(tm) * math.sin(phi), math.cos(tm))
-            seg = rib_segment(f'Rib{i}_{k}', (x, y, z), tangent, normal, (.06, .055, .04), plaster_dark)
+            # Length matches the chord of one 15-degree step (0.240) with a little
+            # overlap, thickness leaves the rib ~0.02 proud of the shell, and the
+            # width is a rib's width. At (.06, .055, .04) each piece was a cube
+            # the size of a rivet plate and the dome read as covered in debris.
+            seg = rib_segment(f'Rib{i}_{k}', (x, y, z), tangent, normal, (.255, .030, .030), plaster_dark)
             parts.append(seg)
     # Rivet bands: two horizontal rings of copper rivets.
     for t in (math.radians(24), math.radians(58)):
         for k in range(11):
-            phi = -math.pi / 2 + math.pi * (k / 10)
+            phi = phi0 + math.pi * (k / 10)
             x = (R + .012) * math.sin(t) * math.cos(phi)
             y = (R + .012) * math.sin(t) * math.sin(phi)
             z = (R + .012) * math.cos(t)

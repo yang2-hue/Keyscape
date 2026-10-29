@@ -73,7 +73,7 @@ export function groundMaps(quality: 'full' | 'software' = 'full'): GroundMaps {
     const u = x / n, v = y / n, i = y * n + x;
     height[i] = .52 * fbm(u, v, 3, 4, 19)
       + .30 * fbm(u, v, 9, 3, 71)
-      + .18 * fbm(u, v, 27, 2, 131);
+      + .18 * fbm(u, v, 27, 1, 131);
     grain[i] = fbm(u, v, 96, 1, 211);
   }
 
@@ -151,7 +151,7 @@ export function groundMaps(quality: 'full' | 'software' = 'full'): GroundMaps {
     albedo[o + 2] = lum * (1 - warmth * .15) * 255;
     albedo[o + 3] = 255;
 
-    const s = 15;
+    const s = 12;
     const nx = -du * s, ny = dv * s, len = Math.hypot(nx, ny, 1);
     normal[o] = (nx / len * .5 + .5) * 255;
     normal[o + 1] = (ny / len * .5 + .5) * 255;
@@ -171,6 +171,143 @@ export function groundMaps(quality: 'full' | 'software' = 'full'): GroundMaps {
   map.colorSpace = THREE.SRGBColorSpace;
   map.wrapS = map.wrapT = THREE.RepeatWrapping;
   map.repeat.set(4, 3);
+  map.anisotropy = 8;
+
+  const normalMap = new THREE.CanvasTexture(canvasFrom(normal, n));
+  normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
+  normalMap.repeat.copy(map.repeat);
+  normalMap.anisotropy = 8;
+
+  const roughnessMap = new THREE.CanvasTexture(canvasFrom(rough, n));
+  roughnessMap.wrapS = roughnessMap.wrapT = THREE.RepeatWrapping;
+  roughnessMap.repeat.copy(map.repeat);
+  roughnessMap.anisotropy = 8;
+
+  return { map, normal: normalMap, rough: roughnessMap };
+}
+
+/** Anisotropic value noise: independent integer periods on each axis. Needed
+ * because a rain streak is many cells wide and one cell tall — the isotropic
+ * version can only make round blobs. */
+function pnoise2(u: number, v: number, cu: number, cv: number, seed: number) {
+  const x = u * cu, y = v * cv;
+  const xi = Math.floor(x), yi = Math.floor(y);
+  const fx = x - xi, fy = y - yi;
+  const sx = fx * fx * (3 - 2 * fx);
+  const sy = fy * fy * (3 - 2 * fy);
+  const at = (i: number, j: number) => {
+    let h = Math.imul(wrap(i, cu), 374761393)
+      ^ Math.imul(wrap(j, cv), 668265263)
+      ^ Math.imul(seed, 1274126177);
+    h = Math.imul(h ^ (h >>> 13), 1103515245);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  };
+  const a = at(xi, yi), b = at(xi + 1, yi), c = at(xi, yi + 1), d = at(xi + 1, yi + 1);
+  const top = a + (b - a) * sx, bottom = c + (d - c) * sx;
+  return top + (bottom - top) * sy;
+}
+
+function fbm2(u: number, v: number, cu: number, cv: number, octaves: number, seed: number) {
+  let sum = 0, amp = 1, norm = 0;
+  for (let o = 0; o < octaves; o++) {
+    sum += amp * pnoise2(u, v, cu, cv, seed + o * 977);
+    norm += amp; amp *= .55; cu *= 2; cv *= 2;
+  }
+  return sum / norm;
+}
+
+/** Lime render on a stone drum.
+ *
+ * The drum is the largest surface in the composition and it was the last one
+ * with no material at all, so it rendered as a grey tube with a plastic sheen.
+ * What actually reads as "old observatory" is not generic dirt but three
+ * specific things: rain running down from the cornice, patches where the render
+ * has fallen away, and a hairline crack network from a century of frost.
+ *
+ * Streaks are one-dimensional on purpose. A periodic function that varies only
+ * across U is continuous all the way down the wall, which is exactly how a
+ * water track behaves; a 2D patch of tiles would break the run into dashes.
+ */
+export function plasterMaps(quality: 'full' | 'software' = 'full'): GroundMaps {
+  const n = quality === 'full' ? 512 : 256;
+  const height = new Float32Array(n * n);
+  const streak = new Float32Array(n);
+
+  // One 1-D profile reused by every column: a finite set of tracks, not noise.
+  for (let x = 0; x < n; x++) {
+    const u = x / n;
+    const cell = fbm(u, 0.5, 41, 3, 913);
+    streak[x] = Math.max(0, cell - .53) / .47;
+  }
+
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    const u = x / n, v = y / n, i = y * n + x;
+    // Trowel: slow undulation plus the ridged ripple of a float finish.
+    // No octave finer than ~22 px of the tile. A 512 tile on a 0.72-unit wall
+    // is minified on screen, and a normal that changes over three texels is not
+    // trowel marks, it is popcorn: the shader reads it as noise, not relief.
+    let e = .50 * fbm2(u, v, 7, 5, 3, 301)
+      + .32 * fbm2(u, v, 13, 9, 2, 419)
+      + .14 * fbm2(u, v, 23, 17, 1, 523);
+    // Cracks: hairline only. Anything wider than a hair reads at this scale as
+    // a painted squiggle, because the drum is five metres of wall in one tile.
+    const coarse = Math.max(0, 1 - Math.abs(pnoise2(u, v, 11, 8, 607) - .5) / .012);
+    const fine = Math.max(0, 1 - Math.abs(pnoise2(u, v, 29, 21, 709) - .5) / .016);
+    e -= .055 * coarse * coarse + .018 * fine * fine;
+    height[i] = e;
+  }
+
+  const albedo = new Uint8ClampedArray(n * n * 4);
+  const normal = new Uint8ClampedArray(n * n * 4);
+  const rough = new Uint8ClampedArray(n * n * 4);
+  const at = (x: number, y: number) => height[wrap(y, n) * n + wrap(x, n)];
+
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    const i = y * n + x, o = i * 4;
+    const u = x / n, v = y / n;
+    const du = (at(x + 1, y) - at(x - 1, y)) * .5;
+    const dv = (at(x, y + 1) - at(x, y - 1)) * .5;
+
+    // Large discoloration first: a wall is never one colour, but lime render is
+    // far closer to one colour than a rock face, and pushing the range turns it
+    // into camouflage.
+    let shade = .98 + (fbm2(u, v, 14, 10, 4, 811) - .5) * .055;
+    // Render fallen away: the patch edge is sharp-ish, the fill is darker and
+    // pinker because the undercoat is showing.
+    const gouge = Math.max(0, Math.min(1, (fbm2(u, v, 5, 4, 3, 617) - .58) / .10));
+    shade -= gouge * .05;
+    // Rain: strongest at the top, gone by the sill line.
+    const run = streak[x] * (1 - Math.min(1, v / .88));
+    shade -= run * .085;
+    // Splash-back and dirt collect along the foot of the wall.
+    shade -= Math.max(0, v - .82) / .18 * .07;
+    // Grain.
+    shade += (fbm2(u, v, 121, 97, 1, 727) - .5) * .028;
+    shade = Math.max(.78, Math.min(1.02, shade));
+
+    albedo[o] = 222 * shade * (1 - gouge * .02);
+    albedo[o + 1] = 216 * shade * (1 - gouge * .035);
+    albedo[o + 2] = 202 * shade;
+    albedo[o + 3] = 255;
+
+    const s = 9;
+    const nx = -du * s, ny = dv * s, len = Math.hypot(nx, ny, 1);
+    normal[o] = (nx / len * .5 + .5) * 255;
+    normal[o + 1] = (ny / len * .5 + .5) * 255;
+    normal[o + 2] = (1 / len * .5 + .5) * 255;
+    normal[o + 3] = 255;
+
+    const value = .94 - gouge * .04 + run * .02;
+    rough[o] = rough[o + 1] = rough[o + 2] = value * 255;
+    rough[o + 3] = 255;
+  }
+
+  const map = new THREE.CanvasTexture(canvasFrom(albedo, n));
+  map.colorSpace = THREE.SRGBColorSpace;
+  map.wrapS = map.wrapT = THREE.RepeatWrapping;
+  // The drum wraps 5.8 units around and stands 0.74 tall; eight repeats across
+  // one down keeps the texels square.
+  map.repeat.set(8, 1);
   map.anisotropy = 8;
 
   const normalMap = new THREE.CanvasTexture(canvasFrom(normal, n));
