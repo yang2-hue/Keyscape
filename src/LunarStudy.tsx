@@ -104,7 +104,7 @@ export function LunarAtmosphere({ moment }: { moment: LunarMoment }) {
  * The shell sits 22–28 units out, well behind the key, so it swings a little
  * when the visitor orbits without ever competing with the terrain, and 55% of
  * the field is pulled into a Milky Way band so the sky is not uniform noise. */
-function Stars({ level }: { level: number }) {
+export function Stars({ level }: { level: number }) {
   const points = useRef<THREE.Points>(null);
   const gl = useThree(state => state.gl);
   const camera = useThree(state => state.camera);

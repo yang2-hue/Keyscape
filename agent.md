@@ -2,7 +2,7 @@
 
 ## 当前范围
 
-展厅现在有两件作品：**C / 海岸**（`src/crescent-bay.ts` + `CrescentStudy.tsx`）与 **SPACE / 月背温室**（`src/lunar-layout.ts` / `lunar-base.ts` / `lunar-weather.ts` + `LunarStudy.tsx`）。左下角 `C / COASTAL`、`SPACE / LUNAR` 即切换器，`?work=space` 可直达。两套时刻循环彼此独立，共用同一套阻尼光照与按需渲染。
+展厅现在有三件作品：**C / 海岸**（`src/crescent-bay.ts` + `CrescentStudy.tsx`）、**SPACE / 月背温室**（`src/lunar-layout.ts` / `lunar-base.ts` / `lunar-weather.ts` + `LunarStudy.tsx`）与 **Q / 废弃天文台**（`src/observatory-layout.ts` / `observatory-base.ts` / `observatory-weather.ts` + `ObservatoryStudy.tsx`，灰模阶段）。左下角三枚标签即切换器，`?work=space`、`?work=observatory` 可直达。三套时刻循环彼此独立，共用同一套阻尼光照与按需渲染。
 
 不擅自恢复旧作品（潮汐之间、云门拱语、蓝洞来信已删除并判定不再采用）、不做整套键盘视图。新作品按 `docs/concepts/next-keys/` 的既定方向推进，世界本身是主角，键帽是载体。
 
@@ -49,6 +49,20 @@ DEV 钩子（生产包不含）：`__lunarLandmarks.{positions,screen,state,audi
 - **教训（给下一个模型）**：软渲染 1–2 fps，`dt` 被钳到 0.05，**阻尼过渡的墙钟时间约是场景时间的 30 倍**。截图前必须等 `dataset` 里的目标值到位，靠 `waitForTimeout(7000)` 拍到的全是过渡中间态——这一轮前半段的"画面发灰"有一半是这个原因。
 
 验收：41 项单测（新增地形颗粒、基座平整、太阳能板贴地）、`pnpm verify` 全过（新增月壤三张贴图、星空淡入、月尘浓度）。
+
+## 2026-10-29 第十九次更新（Q 灰模落地）
+
+按 `docs/q-observatory-spec.md` 做的第一版灰模，已进画廊（`Q / OBSERVATORY`）：
+
+- **结构**：2.96×2.22 键身、R0.92 鼓体（占键宽 62%）、R0.92 穹顶（起拱 0.68）、0.62 环廊、R0.19 桥尾落脚台、0.26×0.15 峡谷。桥与地形按 `bridgePath()` / `observatoryHeight()` 生成，测试直接读同一组函数。
+- **两处与规格的偏离，都是踩坑后的决定**：
+  1. **穹顶不做铰链开合**。最初按「铰在起拱线上、开 62°」实现，结果四分之一球绕边缘一甩，整瓣壳飞到键外、悬在建筑上方——像裂开的蛋而不是天文台。改成 **沿缝滑开 0.22 + 外倾 0.32 rad**，两瓣始终坐在鼓体上。默认闭合（闭合才读得出 Q 的圆碗），第一次点击才打开。
+  2. **世界整体旋转 0.62 rad**。原先桥尾几乎正对相机，透视压缩后尾巴消失；转 35° 后尾巴横在画面右下，Q 才成立。桥、值班室、楼梯都跟着转。
+- **交互**：穹顶开合、值班室灯、望远镜三档指向，全部受暂停/减少动态约束；桥灯与窗光在薄暮与深夜自动点亮，不单独做点击。DEV 钩子 `__observatory.{state,toggleDome,toggleLamp,cycleAim,setOpen,landmarks}`。
+- **四个时刻**：薄暮（西侧低角暖阳 2.6）、深夜（月光 0.62 + 星场满亮）、黎明（东侧 1.6 冷白 + 低雾）、风起（平光 + 260 粒扬尘）。
+- **已知不足（下一轮按顺序改）**：① 全部是素模材质，没有灰泥/铜/铸铁贴图；② 望远镜是黑筒，主镜与叉臂细部不足；③ 楼梯悬在墙外、缺石砌梯梁；④ 峡谷只有形，没有岩壁分层；⑤ 键唇没有 Q 刻印；⑥ 三处点击热区尚未做代理盒，细栏杆不好点。
+
+验收：`tsc` 0 错、51 项单测（新增 9 项 Q 布局测试）、构建通过；浏览器实测三处交互（`open` 0 → 0.95、`lamp` false → true、`aim` 0 → 1）。
 
 ## 2026-10-28 第十八次更新（Q 废弃天文台：补视图与建模前规格）
 

@@ -4,7 +4,7 @@
 
 [在线体验](https://yang2-hue.github.io/Keyscape/) · [下一阶段方案：Space 月背温室](docs/concepts/next-keys/README.md)
 
-An interactive keycap diorama built with React Three Fiber. 展厅里现在有两颗键：**C / 海岸**（月牙海湾、灯塔与渔船）和 **SPACE / 月背温室**（月面基地、气闸与玻璃温室）。左下角标签就是切换器，两件作品各有自己的时刻循环。
+An interactive keycap diorama built with React Three Fiber. 展厅里现在有三颗键：**C / 海岸**（月牙海湾、灯塔与渔船）、**SPACE / 月背温室**（月面基地、气闸与玻璃温室）与 **Q / 废弃天文台**（穹顶观测站、短桥与峡谷；灰模阶段，正在细化）。左下角标签就是切换器，三件作品各有自己的时刻循环。
 
 ![海岸作品实机截图](docs/media/coastal-day.png)
 
@@ -26,7 +26,7 @@ An interactive keycap diorama built with React Three Fiber. 展厅里现在有�
 
 - 尊重系统「减少动态」偏好，暂停后采用按需渲染。
 
-展厅目前是两件作品的原型，还没有整套键盘视图。
+展厅目前是三件作品的原型，还没有整套键盘视图。
 
 ## 本地运行
 

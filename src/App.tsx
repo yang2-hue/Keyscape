@@ -7,17 +7,20 @@ import * as THREE from 'three';
 import { StudioEnvironment, useSoftwareRenderer } from './studio';
 import CrescentStudy from './CrescentStudy';
 import LunarStudy, { LunarAtmosphere } from './LunarStudy';
+import ObservatoryStudy, { ObservatoryAtmosphere } from './ObservatoryStudy';
 import { nextView, type View } from './gallery-state';
 import { WEATHERS, weatherParams,KEY_LIGHT_POSITION, type WeatherKind } from './weather-model';
 import { LUNAR_MOMENTS, lunarSurface, type LunarMoment } from './lunar-weather';
+import { OBSERVATORY_MOMENTS, observatorySurface, type ObservatoryMoment } from './observatory-weather';
 
-export type World = 'coastal' | 'space';
+export type World = 'coastal' | 'space' | 'observatory';
 
-/** The two keys in the exhibition. The label is also the switcher, so the
+/** The three keys in the exhibition. The label is also the switcher, so the
  * chrome stays at one line. */
 const WORKS: { id: World; label: string }[] = [
   { id: 'coastal', label: 'C / COASTAL' },
   { id: 'space', label: 'SPACE / LUNAR' },
+  { id: 'observatory', label: 'Q / OBSERVATORY' },
 ];
 /** How much world each key needs in frame; the spacebar is longer and flatter,
  * so it can be shown larger without clipping. */
@@ -26,6 +29,9 @@ const FRAME: Record<World, { width: number; height: number; floor: number; camer
   // The spacebar is long and flat: a lower eye keeps the slab from reading as a
   // cream brick, and the extra distance fits 3.64 units of key in frame.
   space: { width: 3.95, height: 2.95, floor: -0.24, camera: [5.0, 3.9, 6.6] },
+  // Q is a tall, dense object: a shallower eye keeps the dome from flattening,
+  // and the square key needs height as much as width.
+  observatory: { width: 4.0, height: 3.05, floor: -0.34, camera: [4.7, 4.5, 5.2] },
 };
 
 /** Five moments, in order: morning clear, morning rain, evening clear, evening
@@ -323,20 +329,21 @@ function PostChain({ space = false }: { space?: boolean }) {
   </EffectComposer></>;
 }
 
-function GalleryScene({ playing, world, night, weather, moment, view, reduced, onReady }: { playing: boolean; world: World; night: boolean; weather: WeatherKind; moment: LunarMoment; view: View; reduced: boolean; onReady: () => void }) {
+function GalleryScene({ playing, world, night, weather, moment, observatoryMoment, view, reduced, onReady }: { playing: boolean; world: World; night: boolean; weather: WeatherKind; moment: LunarMoment; observatoryMoment: ObservatoryMoment; view: View; reduced: boolean; onReady: () => void }) {
   const frame = FRAME[world];
   const space = world === 'space';
+  const observatory = world === 'observatory';
   return <Canvas shadows dpr={[1, 2]} frameloop={playing ? 'always' : 'demand'} camera={{ position: [5.6, 5.7, 6.2], near: 0.1, far: 80 }} gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }} onCreated={({ gl }) => { gl.toneMapping = THREE.ACESFilmicToneMapping; gl.toneMappingExposure = 1.12; onReady(); }} fallback={<div className="scene-fallback">当前浏览器不支持 3D 展示。</div>}>
     <QualityProfile />
-    <DemandPump boost={`${world}:${view.kind}:${view.serial}:${space ? moment : `${night ? 1 : 0}:${weather}`}`} playing={playing} />
-    {space ? <LunarAtmosphere moment={moment} /> : <Atmosphere night={night} weather={weather} />}
+    <DemandPump boost={`${world}:${view.kind}:${view.serial}:${space ? moment : observatory ? observatoryMoment : `${night ? 1 : 0}:${weather}`}`} playing={playing} />
+    {space ? <LunarAtmosphere moment={moment} /> : observatory ? <ObservatoryAtmosphere moment={observatoryMoment} /> : <Atmosphere night={night} weather={weather} />}
     <Suspense fallback={null}>
       <StudioEnvironment />
-      {space ? <LunarStudy playing={playing} moment={moment} /> : <CrescentStudy playing={playing} night={night} weather={weather} />}
-      <StudioShadows frames={1} position={[0, frame.floor, 0]} opacity={space ? .5 : .35} scale={12} blur={2.7} far={5} resolution={512} color={space ? '#191a1d' : '#555345'} />
+      {space ? <LunarStudy playing={playing} moment={moment} /> : observatory ? <ObservatoryStudy playing={playing} moment={observatoryMoment} /> : <CrescentStudy playing={playing} night={night} weather={weather} />}
+      <StudioShadows frames={1} position={[0, frame.floor, 0]} opacity={space ? .5 : observatory ? .42 : .35} scale={12} blur={2.7} far={5} resolution={512} color={space ? '#191a1d' : observatory ? '#2a2823' : '#555345'} />
     </Suspense>
-    <CameraRig view={view} reduced={reduced} frame={frame} focusY={space ? [.16, .34] : [.2, .48]} />
-    <PostChain space={space} />
+    <CameraRig view={view} reduced={reduced} frame={frame} focusY={space ? [.16, .34] : observatory ? [.5, .72] : [.2, .48]} />
+    <PostChain space={space || observatory} />
   </Canvas>;
 }
 
@@ -344,8 +351,11 @@ export default function App() {
   const [playing, setPlaying] = useState(true);
   const reduced = useReducedMotion();
   const running = playing && !reduced;
-  const [world, setWorld] = useState<World>(() => new URLSearchParams(window.location.search).get('work') === 'space' ? 'space' : 'coastal');
-  const cycle = world === 'space' ? LUNAR_MOMENTS : CYCLE;
+  const [world, setWorld] = useState<World>(() => {
+    const requested = new URLSearchParams(window.location.search).get('work');
+    return requested === 'space' ? 'space' : requested === 'observatory' ? 'observatory' : 'coastal';
+  });
+  const cycle = world === 'space' ? LUNAR_MOMENTS : world === 'observatory' ? OBSERVATORY_MOMENTS : CYCLE;
   const { step, run } = useAutoCycle(running, cycle);
   const moments = cycle.length;
   const [ready, setReady] = useState(false);
@@ -354,11 +364,18 @@ export default function App() {
 
   const coastal = CYCLE[Math.min(step, CYCLE.length - 1)];
   const lunar = LUNAR_MOMENTS[Math.min(step, LUNAR_MOMENTS.length - 1)];
-  const night = world === 'space' ? lunar.night : coastal.night;
+  const observatory = OBSERVATORY_MOMENTS[Math.min(step, OBSERVATORY_MOMENTS.length - 1)];
+  const night = world === 'space' ? lunar.night : world === 'observatory' ? observatory.night : coastal.night;
   const label = world === 'space'
     ? `月球 · ${lunar.label}`
-    : `${night ? '晚上' : '早上'} · ${WEATHERS.find(item => item.id === coastal.weather)?.title ?? '晴天'}`;
-  const surface = world === 'space' ? `space ${lunarSurface(lunar.id)}` : `${night ? 'night ' : ''}weather-${coastal.weather}`;
+    : world === 'observatory'
+      ? `天文台 · ${observatory.label}`
+      : `${night ? '晚上' : '早上'} · ${WEATHERS.find(item => item.id === coastal.weather)?.title ?? '晴天'}`;
+  const surface = world === 'space'
+    ? `space ${lunarSurface(lunar.id)}`
+    : world === 'observatory'
+      ? `observatory ${observatorySurface(observatory.id)}`
+      : `${night ? 'night ' : ''}weather-${coastal.weather}`;
   const progress = Math.round(assetProgress.progress);
 
   const pick = (next: World) => {
@@ -371,7 +388,7 @@ export default function App() {
     <header className="masthead"><a className="wordmark" href={import.meta.env.BASE_URL} aria-label="Keyscape 首页">keyscape</a><span className="edition">INTERACTIVE STUDIES / 001</span></header>
 
     <section className="art-stage" aria-label="可旋转的三维艺术键">
-      <SceneBoundary><GalleryScene playing={running} world={world} night={night} weather={coastal.weather} moment={lunar.id} view={view} reduced={reduced} onReady={() => setReady(true)} /></SceneBoundary>
+      <SceneBoundary><GalleryScene playing={running} world={world} night={night} weather={coastal.weather} moment={lunar.id} observatoryMoment={observatory.id} view={view} reduced={reduced} onReady={() => setReady(true)} /></SceneBoundary>
       {(!ready || assetProgress.active) && <div className="loading" role="status">
         <span className="loading-row"><span>正在布置展厅</span><span className="loading-value">{progress}%</span></span>
         <span className="loading-track"><span className="loading-fill" style={{ transform: `scaleX(${progress / 100})` }} /></span>
