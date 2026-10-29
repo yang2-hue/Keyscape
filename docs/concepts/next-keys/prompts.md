@@ -82,3 +82,16 @@ Revise the proportions of this exact miniature world. Keep the same materials, l
 
 The plan must read instantly as the letter Q at thumbnail size: big round bowl, short thick tail at the lower right. Photoreal hand-built museum maquette, raking side light, fine stonework and metalwork, pale snow-free alpine rock, no toy plastic. Near-charcoal seamless studio backdrop, whole model in frame with breathing room. Landscape 3:2 image. No text, labels, arrows, UI, watermark or concept-sheet borders.
 ```
+
+### q plan — v3, observatory 62% and a stub tail
+
+```text
+Same miniature observatory world, same top-down camera (15 degrees off vertical), same materials and lighting. Push the proportions further so the letter Q is unmistakable at a glance:
+
+1) THE OBSERVATORY IS NOW EVEN BIGGER — its circular ivory drum fills about 62% of the key's width and reads as the bowl of the Q. The dome scales with it, open ~55 degrees.
+2) THE TAIL IS SHORTER AND THICKER. From the drum's east door a very short stone bridge — barely longer than the drum's wall thickness times three — steps down to a compact round landing at the 4 o'clock position, just outside the bowl with a clear gap between landing and drum. It reads as one short, blunt, thick stroke, like the tail of a printed serif Q. Absolutely no long bridge, no loop, no thin gangway.
+3) The keycap stays a landscape rounded rectangle about 1.35:1, but the drum now crowds it; only a narrow band of rock, gravel and two conifers remains around the building. The duty room is small and tight against the drum at 1-2 o'clock.
+4) Keep the engraved Q on the front key lip only.
+
+The silhouette test: at 200 pixels wide it must read as Q, not O and not a key with a bridge. Photoreal hand-built museum maquette, raking side light, fine stone and metalwork, no toy plastic. Near-charcoal seamless studio backdrop, whole model in frame. Landscape 3:2. No text, labels, arrows, UI, watermark or borders.
+```
