@@ -26,7 +26,7 @@ export const SITE = {
   /** The tail: door on the drum's rim, a short deck, and a round landing that
    * overhangs the keycap lip. Tail length is measured rim to landing edge. */
   bridge: { door: { x: 0.26, z: 0.54 }, landing: { x: 0.86, z: 0.96 }, landingRadius: 0.19, halfWidth: 0.14, deckY: 0.20 },
-  gorge: { x: 0.64, z: 0.78, rx: 0.26, rz: 0.15, depth: 0.40 },
+  gorge: { x: 0.64, z: 0.78, rx: 0.26, rz: 0.15, depth: 0.055 },
   stair: { startAngle: 2.30, sweep: 1.05, steps: 10, width: 0.26, radius: 1.00 },
   telescope: { pierTop: 0.52, axis: 0.76, tube: 0.96, tubeRadius: 0.13, mirror: 0.21 },
 };
@@ -71,8 +71,8 @@ export function observatoryOutline() {
 export function gorgeDepth(x: number, z: number) {
   const { x: gx, z: gz, rx, rz, depth } = SITE.gorge;
   const d = Math.hypot((x - gx) / rx, (z - gz) / rz);
-  // A sharp lip then a steep wall: a soft bowl reads as a puddle, not a cut.
-  const wall = 1 - smooth(d, 0.55, 1.0);
+  // A shallow drainage hollow under the walkway, never a hole through the key.
+  const wall = 1 - smooth(d, 0.15, 1.0);
   return depth * wall;
 }
 

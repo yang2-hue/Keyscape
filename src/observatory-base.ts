@@ -447,12 +447,15 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
       const post = put(bridge, new THREE.CylinderGeometry(.005, .005, .12, 5), m.iron);
       post.position.set(SITE.bridge.landing.x + Math.cos(a) * (SITE.bridge.landingRadius - .012), SITE.bridge.deckY + .06, SITE.bridge.landing.z + Math.sin(a) * (SITE.bridge.landingRadius - .012));
     }
-    const corbel = put(bridge, new THREE.CylinderGeometry(.11, .05, .26, 16), m.bridgeStone);
-    corbel.position.set(SITE.bridge.landing.x, SITE.bridge.deckY - .18, SITE.bridge.landing.z);
+    const landingGround=observatorySurfaceHeight(SITE.bridge.landing.x,SITE.bridge.landing.z);
+    const footingTop=SITE.bridge.deckY-.05;
+    const footingBottom=landingGround-.015;
+    const corbel = put(bridge, new THREE.CylinderGeometry(.11, .14, footingTop-footingBottom, 20), m.bridgeStone,'QBridgeFooting');
+    corbel.position.set(SITE.bridge.landing.x,(footingTop+footingBottom)/2,SITE.bridge.landing.z);
     // Two piers standing in the gorge.
     for (const t of [.34, .66]) {
       const p = new THREE.Vector3().lerpVectors(path[0], path[path.length - 1], t);
-      const ground = observatoryHeight(p.x, p.z);
+      const ground = observatorySurfaceHeight(p.x, p.z);
       const height = Math.max(.08, p.y - ground);
       const pier = put(bridge, new THREE.BoxGeometry(.10, height, .10), m.bridgeStone);
       pier.position.set(p.x, ground + height / 2, p.z);

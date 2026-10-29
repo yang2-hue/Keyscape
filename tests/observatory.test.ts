@@ -39,14 +39,14 @@ test('the drum fits inside the key with a margin', () => {
   assert.ok(radius * 2 / (OBS.halfWidth * 2) > 0.60, 'drum must occupy at least 60% of the key width');
 });
 
-test('the drum sits on flat ground and the gorge is a real cut', () => {
+test('the drum sits on flat ground and the bridge hollow stays shallow and above the base bottom', () => {
   const { x, z, radius } = SITE.drum;
   for (const [dx, dz] of [[0, 0], [radius * 0.7, 0], [0, radius * 0.7], [-radius * 0.6, radius * 0.6]]) {
     near(observatoryHeight(x + dx, z + dz), OBS.pad, 0.004, 'pad is flat under the drum');
   }
   const gorge = observatoryHeight(SITE.gorge.x, SITE.gorge.z);
-  assert.ok(gorge < OBS.pad - 0.2, `gorge floor must drop below the pad (${gorge.toFixed(3)})`);
-  assert.ok(gorgeDepth(SITE.gorge.x, SITE.gorge.z) > 0.25);
+  assert.ok(gorge < OBS.pad && gorge > -OBS.base+.15, `shallow hollow stays inside the key (${gorge.toFixed(3)})`);
+  assert.ok(gorgeDepth(SITE.gorge.x, SITE.gorge.z) <= .06);
   assert.ok(gorgeDepth(SITE.gorge.x + SITE.gorge.rx * 2, SITE.gorge.z) === 0, 'outside the rim there is no cut');
 });
 
