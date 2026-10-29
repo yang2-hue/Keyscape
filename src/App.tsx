@@ -385,7 +385,12 @@ export default function App() {
   };
 
   return <main className={`gallery ${surface}`} data-motion={running ? 'running' : 'paused'} data-world={world} style={{ '--dwell': `${DWELL_MS}ms` } as CSSProperties}>
-    <header className="masthead"><a className="wordmark" href={import.meta.env.BASE_URL} aria-label="Keyscape 首页">keyscape</a><span className="edition">INTERACTIVE STUDIES / 001</span></header>
+    {/* Only the wordmark. An "INTERACTIVE STUDIES / 001" edition line used to sit
+        on the right; it asserted a series and an issue number that nothing in
+        the app ever produced, and it was already cut once for exactly that
+        reason. A label that invents its own metadata is worse than an empty
+        corner. */}
+    <header className="masthead"><a className="wordmark" href={import.meta.env.BASE_URL} aria-label="Keyscape 首页">keyscape</a></header>
 
     <section className="art-stage" aria-label="可旋转的三维艺术键">
       <SceneBoundary><GalleryScene playing={running} world={world} night={night} weather={coastal.weather} moment={lunar.id} observatoryMoment={observatory.id} view={view} reduced={reduced} onReady={() => setReady(true)} /></SceneBoundary>
