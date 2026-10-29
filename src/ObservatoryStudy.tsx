@@ -190,9 +190,32 @@ export default function ObservatoryStudy({ playing, moment }: { playing: boolean
     event?.stopPropagation();
     if (!playing) return;
     // Closed dome: a short nudge instead of a silent no-op.
-    if (open.current < .82) { busy.current = .35; return; }
+    if (open.current < .5) { busy.current = .35; return; }
     setAim(value => (value + 1) % AIMS.length);
     busy.current = 1;
+  }, [playing]);
+
+  // Clicking the telescope when it is already aimed starts a slow search sweep:
+  // it pans through the sky and settles back. The sweep reads as the observer
+  // hunting for a star, and it is interruptible by another click.
+  const sweeping = useRef(false);
+  const sweepPhase = useRef(0);
+  const startSweep = useCallback((event?: ThreeEvent<MouseEvent>) => {
+    event?.stopPropagation();
+    if (!playing) return;
+    if (open.current < .5) { busy.current = .35; return; }
+    sweeping.current = !sweeping.current;
+    if (sweeping.current) sweepPhase.current = 0;
+  }, [playing]);
+
+  // The rusted barrel topples when clicked: a small, satisfying physics beat
+  // that sells the abandoned props as real objects, not scenery.
+  const barrelTipped = useRef(false);
+  const barrelTilt = useRef(0);
+  const toggleBarrel = useCallback((event?: ThreeEvent<MouseEvent>) => {
+    event?.stopPropagation();
+    if (!playing) return;
+    barrelTipped.current = !barrelTipped.current;
   }, [playing]);
 
   useEffect(() => {
@@ -202,6 +225,8 @@ export default function ObservatoryStudy({ playing, moment }: { playing: boolean
       }
       if (object.name === 'QDutyWalls' || object.name === 'QDutyWindow') object.userData.click = true;
       if (object.name === 'QTelescopeBarrel') object.userData.click = true;
+      if (object.name === 'QBarrel') object.userData.click = true;
+      if (object.name === 'QCistern') object.userData.click = true;
     });
   }, [base]);
 
@@ -226,8 +251,7 @@ export default function ObservatoryStudy({ playing, moment }: { playing: boolean
       half.rotation.z = -side * angle;
     });
 
-    base.telescopeFork.rotation.y = aimValue.current.azimuth;
-    base.telescopeTube.rotation.z = aimValue.current.altitude;
+    // (telescope aim is driven below, overriding for the search sweep)
 
     // The lamps come on with the dark whether or not anyone clicks: an
     // observatory with a warm window at dusk is the whole point of the piece.
@@ -248,6 +272,35 @@ export default function ObservatoryStudy({ playing, moment }: { playing: boolean
     base.beaconMaterial.emissiveIntensity = THREE.MathUtils.damp(
       base.beaconMaterial.emissiveIntensity, beaconOn * (1.6 + pulse * 1.2), 3, step,
     );
+    // A search sweep overrides the aim preset: pan smoothly through a wide
+    // azimuth while the tube rides a slow sine, then release back to the preset.
+    if (active && sweeping.current) {
+      sweepPhase.current += step;
+      const sweepAzimuth = .3 + Math.sin(sweepPhase.current * .6) * 2.0;
+      const sweepAltitude = .7 + Math.sin(sweepPhase.current * .42 + 1.1) * .5;
+      base.telescopeFork.rotation.y = THREE.MathUtils.damp(
+        base.telescopeFork.rotation.y, sweepAzimuth, 2.2, step,
+      );
+      base.telescopeTube.rotation.z = THREE.MathUtils.damp(
+        base.telescopeTube.rotation.z, sweepAltitude, 2.2, step,
+      );
+    } else {
+      base.telescopeFork.rotation.y = aimValue.current.azimuth;
+      base.telescopeTube.rotation.z = aimValue.current.altitude;
+    }
+    // The rusted barrel topples with a damped fall and settles on its side.
+    if (base.barrel) {
+      const targetTilt = barrelTipped.current ? Math.PI / 2 : 0;
+      barrelTilt.current = THREE.MathUtils.damp(barrelTilt.current, targetTilt, 2.0, step);
+      base.barrel.rotation.z = .12 + barrelTilt.current;
+      base.barrel.position.y = .06 + barrelTilt.current * .02;
+    }
+    // The interior light flickers faintly: a still-powered lamp with a dying
+    // connection. It only shows after dark, and only a few percent.
+    if (lampValue.current > .3 && preset.night) {
+      const flicker = 1 + Math.sin(elapsed.current * 13.7) * .06 + Math.sin(elapsed.current * 29.3) * .03;
+      base.windowMaterial.emissiveIntensity *= flicker;
+    }
 
     if (import.meta.env.DEV) {
       const d = gl.domElement.dataset;
@@ -272,22 +325,28 @@ export default function ObservatoryStudy({ playing, moment }: { playing: boolean
         aim,
         altitude: aimValue.current.altitude,
         azimuth: aimValue.current.azimuth,
+        sweeping: sweeping.current,
+        barrelTipped: barrelTipped.current,
       }),
       toggleDome: () => toggleDome(),
       toggleLamp: () => toggleLamp(),
       cycleAim: () => cycleAim(),
+      startSweep: () => startSweep(),
+      toggleBarrel: () => toggleBarrel(),
       landmarks: { drum: SITE.drum, bridge: SITE.bridge, domeSpring: SITE.dome.spring, gallery: SITE.gallery },
       setOpen: (value: number) => { openTarget.current = value; intent.current = value > .5 ? 'open' : 'close'; },
     };
     return () => { delete debug.__observatory; };
-  }, [toggleDome, toggleLamp, cycleAim, lamp, aim]);
+  }, [toggleDome, toggleLamp, cycleAim, startSweep, toggleBarrel, lamp, aim]);
 
   return <>
     <primitive object={base.root} dispose={null} onClick={(event: ThreeEvent<MouseEvent>) => {
       const clicked = (event.object as THREE.Mesh).userData.click ? event.object.name : '';
       if (clicked.startsWith('QDome')) toggleDome(event);
       else if (clicked.startsWith('QDuty')) toggleLamp(event);
-      else if (clicked.startsWith('QTelescope')) cycleAim(event);
+      else if (clicked.startsWith('QTelescope')) startSweep(event);
+      else if (clicked.startsWith('QBarrel')) toggleBarrel(event);
+      else if (clicked.startsWith('QCistern')) toggleBarrel(event);
     }} onPointerOver={(event: ThreeEvent<PointerEvent>) => {
       if ((event.object as THREE.Mesh).userData.click) gl.domElement.style.cursor = 'pointer';
     }} onPointerOut={() => { gl.domElement.style.cursor = ''; }} />

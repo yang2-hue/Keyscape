@@ -69,25 +69,43 @@ def noisy(shape, rng, octaves=4):
 
 
 def textured_plaster(mat, base, rng):
-    """Stucco: broad patches, fine grain, and a normal map derived from the same
-    field so the surface catches the low sun instead of reading as vinyl."""
+    """Aged stucco: strong grain, grime that gathers at the bottom, and vertical
+    rust/water streaks running down from the copper and the eaves. The streaks
+    are what read as 'abandoned', not just 'off-white'."""
     n = 512
+    y, x = np.mgrid[0:n, 0:n] / (n - 1)
     broad = noisy((n, n), rng, 3)
-    grain = noisy((n, n), rng, 5)
-    height = broad * .65 + grain * .35
-    albedo = np.clip(np.array(base) * (1 + (height[:, :, None] - .5) * .16), 0, 1)
-    al = raster(mat, 'plaster albedo', albedo, True)
+    grain = noisy((n, n), rng, 6)
+    # Grime: darker toward the ground, patchy like soot and moss.
+    grime = np.clip((1.0 - y) * 1.4 + (broad - .5) * .8, 0, 1)
+    # Vertical streaks: a few channels where rain has run rust and dust down.
+    streaks = np.zeros((n, n), dtype=np.float32)
+    for _ in range(7):
+        sx = rng.random()
+        width = .004 + rng.random() * .014
+        falloff = rng.random() * .6 + .3
+        col = np.exp(-((x - sx) ** 2) / (2 * width ** 2))
+        col *= np.clip(1.0 - y * falloff, 0, 1)
+        streaks += col * (.4 + rng.random() * .8)
+    streaks = np.clip(streaks, 0, 1)
+    # Compose albedo: base plaster, darkened by grime, tinted by rust streaks.
+    alb = np.array(base)[None, None, :] * (1 + (broad[:, :, None] - .5) * .22)
+    alb *= (1 - grime[:, :, None] * .30)
+    rust = np.array([.55, .30, .16])[None, None, :]
+    alb = alb * (1 - streaks[:, :, None] * .55) + rust * (streaks[:, :, None] * .55)
+    alb = np.clip(alb, 0, 1)
+    al = raster(mat, 'plaster albedo', alb, True)
     p = mat.node_tree.nodes['Principled BSDF']
     mat.node_tree.links.new(al.outputs['Color'], p.inputs['Base Color'])
-    rough = np.repeat(np.clip(.86 + (grain - .5) * .18, 0, 1)[:, :, None], 3, axis=2)
+    rough = np.repeat(np.clip(.82 + (grain - .5) * .24 + streaks * .1, 0, 1)[:, :, None], 3, axis=2)
     ro = raster(mat, 'plaster roughness', rough)
     mat.node_tree.links.new(ro.outputs['Color'], p.inputs['Roughness'])
-    gy, gx = np.gradient(height)
-    norm = np.dstack((-gx * 26, -gy * 26, np.ones_like(gx)))
+    gy, gx = np.gradient(broad * .7 + grain * .3)
+    norm = np.dstack((-gx * 34, -gy * 34, np.ones_like(gx)))
     norm /= np.linalg.norm(norm, axis=2, keepdims=True)
     no = raster(mat, 'plaster normal', norm * .5 + .5)
     nm = mat.node_tree.nodes.new('ShaderNodeNormalMap')
-    nm.inputs['Strength'].default_value = .7
+    nm.inputs['Strength'].default_value = .8
     mat.node_tree.links.new(no.outputs['Color'], nm.inputs['Color'])
     mat.node_tree.links.new(nm.outputs['Normal'], p.inputs['Normal'])
 

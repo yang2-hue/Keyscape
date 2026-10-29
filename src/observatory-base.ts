@@ -29,6 +29,10 @@ export type ObservatoryBase = {
   glowMaterials: THREE.MeshStandardMaterial[];
   /** Red apex beacon, pulsed at night. */
   beaconMaterial: THREE.MeshStandardMaterial;
+  /** The rusted barrel, toppled on click. */
+  barrel: THREE.Object3D | null;
+  /** The water cistern, drips on click. */
+  cistern: THREE.Object3D | null;
   lamps: THREE.PointLight[];
   dispose: () => void;
 };
@@ -37,13 +41,13 @@ const PALETTE = {
   plaster: '#ded8c8',
   plasterShadow: '#c9c2b1',
   copper: '#7a5334',
-  iron: '#3a3a38',
+  iron: '#5a5550',
   brass: '#a4823f',
   slate: '#4a5054',
   glass: '#0e1720',
   wood: '#6b4a30',
   rock: '#6d6a63',
-  rockLight: '#8b877c',
+  rockLight: '#938e80',
   cap: '#efe9dc',
   capTrim: '#ded7c6',
   warm: '#ffb45e',
@@ -510,6 +514,140 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
     }
   }
 
+  // ---- ground scrub -----------------------------------------------------
+  // Tussocks of dry grass and low moss break the bare rock and sell the 'empty
+  // hill station' feel without cluttering the access paths.
+  {
+    const random = seeded(2026102902);
+    const tuftGeometry = (() => {
+      // A small clump of tapered blades, the same cheap approach as the olive
+      // foliage: thin cards beat blobs at this scale.
+      const blades = 9;
+      const pos: number[] = [], idx: number[] = [];
+      for (let b = 0; b < blades; b++) {
+        const a = random() * Math.PI * 2;
+        const h = .04 + random() * .06;
+        const w = .008 + random() * .006;
+        const dx = Math.cos(a), dz = Math.sin(a), sx = -dz, sz = dx;
+        const base = pos.length / 3;
+        for (let s = 0; s < 2; s++) {
+          const t = s;
+          pos.push(dx * t * h * .6 + sx * w, t * h, dz * t * h * .6 + sz * w);
+          pos.push(dx * t * h * .6 - sx * w, t * h, dz * t * h * .6 - sz * w);
+        }
+        idx.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      g.setIndex(idx);
+      g.computeVertexNormals();
+      return g;
+    })();
+    const grassMat = own(material('#5b6a44', .95));
+    const mossMat = own(material('#4c5a3c', .98));
+    const n = quality === 'full' ? 120 : 50;
+    for (let i = 0; i < n; i++) {
+      const x = (random() - .5) * (OBS.halfWidth * 2 - .3);
+      const z = (random() - .5) * (OBS.halfDepth * 2 - .26);
+      if (Math.hypot(x - SITE.drum.x, z - SITE.drum.z) < SITE.drum.radius * 1.02) continue;
+      if (Math.abs(x - SITE.bridge.door.x) < .3 && Math.abs(z - SITE.bridge.door.z) < .3) continue;
+      const tuft = new THREE.Mesh(tuftGeometry, random() < .5 ? grassMat : mossMat);
+      tuft.position.set(x, observatoryHeight(x, z), z);
+      tuft.rotation.y = random() * Math.PI * 2;
+      const s = .5 + random() * 1.1;
+      tuft.scale.setScalar(s);
+      tuft.castShadow = true;
+      root.add(tuft);
+    }
+  }
+
+  // ---- abandoned props --------------------------------------------------
+  // A few weathered objects that make the site read as 'left behind', not
+  // 'never finished': a water cistern, wooden crates, a rusted barrel, a coil
+  // of cable and a leaning equipment rack.
+  let barrelRef: THREE.Object3D | null = null;
+  let cisternRef: THREE.Object3D | null = null;
+  {
+    const box = (name: string, x: number, z: number, w: number, h: number, d: number, mat: THREE.Material, rotY = 0) => {
+      const mesh = put(root, new THREE.BoxGeometry(w, h, d), mat, name);
+      mesh.position.set(x, observatoryHeight(x, z) + h / 2, z);
+      mesh.rotation.y = rotY;
+      return mesh;
+    };
+    // Cistern against the drum, catching roof water.
+    cisternRef = put(root, new THREE.CylinderGeometry(.09, .10, .18, 16), m.iron, 'QCistern');
+    cisternRef.position.set(SITE.drum.x - .98, .10, SITE.drum.z - .55);
+    cisternRef.castShadow = true;
+    // Crates near the duty room.
+    box('QCrateA', SITE.duty.x + .30, SITE.duty.z - .18, .10, .07, .09, m.wood, .5);
+    box('QCrateB', SITE.duty.x + .34, SITE.duty.z - .05, .08, .05, .08, m.wood, 1.1);
+    // A rusted barrel by the stair base.
+    barrelRef = put(root, new THREE.CylinderGeometry(.05, .05, .12, 12), m.iron, 'QBarrel');
+    barrelRef.position.set(SITE.drum.x - .60, .06, SITE.drum.z + .72);
+    barrelRef.rotation.z = .12;
+    barrelRef.castShadow = true;
+    // A coil of cable and a leaning rack near the bridge door.
+    const coil = put(root, new THREE.TorusGeometry(.045, .008, 6, 12), m.iron, 'QCableCoil');
+    coil.rotation.x = Math.PI / 2;
+    coil.position.set(SITE.bridge.door.x - .18, .02, SITE.bridge.door.z + .10);
+    const rack = box('QRack', SITE.bridge.door.x - .30, SITE.bridge.door.z - .16, .14, .02, .05, m.iron);
+    rack.position.y = observatoryHeight(SITE.bridge.door.x - .30, SITE.bridge.door.z - .16) + .05;
+    rack.rotation.z = .22;
+    // A fallen radio dish on the west ridge: the defining relic of an abandoned
+    // station. It is deliberately oversized so it reads from the gallery camera,
+    // lying face-down with its mast snapped and a cable spooled beside it.
+    const dishGroup = new THREE.Group();
+    dishGroup.position.set(SITE.drum.x - .98, observatoryHeight(SITE.drum.x - .98, SITE.drum.z - .34), SITE.drum.z - .34);
+    root.add(dishGroup);
+    const mast = put(dishGroup, new THREE.CylinderGeometry(.02, .035, .42, 10), m.iron, 'QDishMast');
+    mast.position.set(0, .20, 0);
+    mast.rotation.z = .42;
+    const dish = put(dishGroup, new THREE.SphereGeometry(.22, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), m.iron, 'QDish');
+    dish.scale.set(1, .45, 1);
+    dish.position.set(.18, .10, .04);
+    dish.rotation.set(0, .3, -.42);
+    const strut = put(dishGroup, new THREE.CylinderGeometry(.008, .008, .20, 6), m.iron, 'QDishStrut');
+    strut.position.set(.05, .12, .04);
+    strut.rotation.z = -.4;
+    // A sagging wire fence along the north edge, missing a few posts.
+    for (let i = 0; i < 7; i++) {
+      const x = -1.05 + i * .34;
+      const z = -.88;
+      if (i === 3) continue; // a fallen post
+      const post = put(root, new THREE.CylinderGeometry(.008, .008, .16, 6), m.iron, 'QFencePost');
+      post.position.set(x, observatoryHeight(x, z) + .08, z);
+      if (i === 5) post.rotation.z = .5;
+    }
+    const wire = put(root, new THREE.TorusGeometry(1.0, .004, 4, 32, Math.PI), m.iron, 'QFenceWire');
+    wire.rotation.set(0, Math.PI / 2, 0);
+    wire.position.set(-.04, observatoryHeight(-.04, -.88) + .12, -.88);
+    wire.scale.set(1, 1, .3);
+  }
+
+  // ---- gravel path ------------------------------------------------------
+  // A worn path from the stair base around to the duty-room door, so the site
+  // has a beaten route and not just scattered rock.
+  {
+    const pathMat = own(material('#8a8477', .96));
+    const random = seeded(2026102903);
+    const n = quality === 'full' ? 220 : 90;
+    for (let i = 0; i < n; i++) {
+      const t = random();
+      // Arc from the stair landing, past the drum's south face, to the duty room.
+      const ang = -1.9 + t * 2.6;
+      const r = SITE.drum.radius + .30 + (random() - .5) * .12;
+      const x = SITE.drum.x + Math.cos(ang) * r;
+      const z = SITE.drum.z + Math.sin(ang) * r;
+      const stone = new THREE.Mesh(track(new THREE.SphereGeometry(1, 6, 4)), pathMat);
+      const s = .02 + random() * .025;
+      stone.scale.set(s, s * .5, s);
+      stone.position.set(x, observatoryHeight(x, z) + s * .18, z);
+      stone.rotation.y = random() * Math.PI;
+      stone.receiveShadow = true;
+      root.add(stone);
+    }
+  }
+
   // ---- lamps ------------------------------------------------------------
   const lamps: THREE.PointLight[] = [];
   {
@@ -556,6 +694,8 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
     lampMaterial: m.lamp,
     glowMaterials,
     beaconMaterial,
+    barrel: barrelRef,
+    cistern: cisternRef,
     lamps,
     dispose,
   };
