@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  OBS, SITE, bridgePath, gorgeDepth, observatoryHeight, observatoryOutline, outlinePoint,
+  observatoryInset, observatorySurfaceHeight, OBS, SITE, bridgePath, gorgeDepth, observatoryHeight, observatoryOutline, outlinePoint,
 } from '../src/observatory-layout.ts';
 import { OBSERVATORY_MOMENTS } from '../src/observatory-weather.ts';
 
@@ -129,4 +129,16 @@ test('four moments, one loop, no duplicate ids', () => {
   const dusk = OBSERVATORY_MOMENTS.find(moment => moment.id === 'dusk')!;
   const dawn = OBSERVATORY_MOMENTS.find(moment => moment.id === 'dawn')!;
   assert.ok(dusk.key[0] < 0 && dawn.key[0] > 0);
+});
+
+ test('rounded footprint inset excludes stones crossing straight edges and corners',()=>{
+   assert.ok(observatoryInset(0,0)>.1);
+   assert.ok(observatoryInset(OBS.halfWidth-.01,0)<.025);
+   assert.ok(observatoryInset(OBS.halfWidth-.01,OBS.halfDepth-.01)<0);
+   for(const p of observatoryOutline())assert.ok(Math.abs(observatorySurfaceHeight(p.x,p.y))<1e-8);
+ });
+
+test('daylight observatory presets hide stars while night retains them',()=>{
+  for(const id of ['dawn','wind'])assert.equal(OBSERVATORY_MOMENTS.find(p=>p.id===id)!.stars,0);
+  assert.equal(OBSERVATORY_MOMENTS.find(p=>p.id==='night')!.stars,1);
 });

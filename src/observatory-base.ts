@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { OBS, SITE, bridgePath, observatoryHeight, observatoryOutline, outlinePoint } from './observatory-layout';
+import { OBS, SITE, bridgePath, observatoryHeight, observatoryInset, observatorySurfaceHeight, outlinePoint } from './observatory-layout';
 import { seeded } from './coastal-materials';
 
 type Quality = 'full' | 'software';
@@ -104,7 +104,14 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
   // ---- keycap body ------------------------------------------------------
   // Open shell again: an extruded prism would cap the top and that lid would
   // show through the gorge as a pale floor.
-  const outline = observatoryOutline();
+  const segX = quality === 'full' ? 260 : 120, segZ = quality === 'full' ? 196 : 88;
+  // Match the terrain grid's actual boundary, including rounded-corner samples.
+  const outline:THREE.Vector2[]=[];
+  const edge=(x:number,z:number)=>{const p=outlinePoint(x,z);outline.push(new THREE.Vector2(...p));};
+  for(let i=0;i<segZ;i++)edge(OBS.halfWidth,-OBS.halfDepth+2*OBS.halfDepth*i/segZ);
+  for(let i=0;i<segX;i++)edge(OBS.halfWidth-2*OBS.halfWidth*i/segX,OBS.halfDepth);
+  for(let i=0;i<segZ;i++)edge(-OBS.halfWidth,OBS.halfDepth-2*OBS.halfDepth*i/segZ);
+  for(let i=0;i<segX;i++)edge(-OBS.halfWidth+2*OBS.halfWidth*i/segX,-OBS.halfDepth);
   {
     const position: number[] = [], normal: number[] = [], uv: number[] = [], index: number[] = [];
     for (let i = 0; i < outline.length; i++) {
@@ -132,7 +139,6 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
   }
 
   // ---- terrain ----------------------------------------------------------
-  const segX = quality === 'full' ? 260 : 120, segZ = quality === 'full' ? 196 : 88;
   {
     const plane = track(new THREE.PlaneGeometry(OBS.halfWidth * 2, OBS.halfDepth * 2, segX, segZ));
     plane.rotateX(-Math.PI / 2);
@@ -142,7 +148,7 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
     const light = new THREE.Color(PALETTE.rockLight);
     for (let i = 0; i < position.count; i++) {
       const [x, z] = outlinePoint(position.getX(i), position.getZ(i));
-      const h = observatoryHeight(x, z);
+      const h = observatorySurfaceHeight(x,z);
       position.setXYZ(i, x, h, z);
       const tint = THREE.MathUtils.clamp(0.5 + 0.9 * (h - OBS.pad), 0, 1);
       const c = base.clone().lerp(light, tint * .55);
@@ -179,14 +185,16 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
       const onBridge = Math.abs(x - (SITE.bridge.door.x + SITE.bridge.landing.x) / 2) < .34
         && Math.abs(z - (SITE.bridge.door.z + SITE.bridge.landing.z) / 2) < .30;
       if (nearDrum || nearDuty || onBridge) continue;
-      spots.push({ x, z, s: .035 + random() * .075 });
+      const size=.035+random()*.075;
+      if(observatoryInset(x,z)<size*1.5+.015)continue;
+      spots.push({x,z,s:size});
     }
     const instanced = new THREE.InstancedMesh(rockGeometry, m.rock, spots.length);
     instanced.name = 'QRocks';
     instanced.castShadow = true; instanced.receiveShadow = true;
     const matrix = new THREE.Matrix4(), quat = new THREE.Quaternion(), scale = new THREE.Vector3(), pos = new THREE.Vector3();
     spots.forEach((spot, i) => {
-      pos.set(spot.x, observatoryHeight(spot.x, spot.z) + spot.s * .42, spot.z);
+      pos.set(spot.x, observatorySurfaceHeight(spot.x, spot.z) + spot.s * .42, spot.z);
       quat.setFromEuler(new THREE.Euler(spot.s * 2.1, spot.s * 7.3, spot.s * 1.7));
       scale.set(spot.s, spot.s * .82, spot.s * 1.05);
       matrix.compose(pos, quat, scale);
@@ -609,19 +617,7 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
     const strut = put(dishGroup, new THREE.CylinderGeometry(.008, .008, .20, 6), m.iron, 'QDishStrut');
     strut.position.set(.05, .12, .04);
     strut.rotation.z = -.4;
-    // A sagging wire fence along the north edge, missing a few posts.
-    for (let i = 0; i < 7; i++) {
-      const x = -1.05 + i * .34;
-      const z = -.88;
-      if (i === 3) continue; // a fallen post
-      const post = put(root, new THREE.CylinderGeometry(.008, .008, .16, 6), m.iron, 'QFencePost');
-      post.position.set(x, observatoryHeight(x, z) + .08, z);
-      if (i === 5) post.rotation.z = .5;
-    }
-    const wire = put(root, new THREE.TorusGeometry(1.0, .004, 4, 32, Math.PI), m.iron, 'QFenceWire');
-    wire.rotation.set(0, Math.PI / 2, 0);
-    wire.position.set(-.04, observatoryHeight(-.04, -.88) + .12, -.88);
-    wire.scale.set(1, 1, .3);
+
   }
 
   // ---- gravel path ------------------------------------------------------
@@ -638,10 +634,12 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
       const r = SITE.drum.radius + .30 + (random() - .5) * .12;
       const x = SITE.drum.x + Math.cos(ang) * r;
       const z = SITE.drum.z + Math.sin(ang) * r;
-      const stone = new THREE.Mesh(track(new THREE.SphereGeometry(1, 6, 4)), pathMat);
       const s = .02 + random() * .025;
+      if(observatoryInset(x,z)<s+.025)continue;
+      const stone = new THREE.Mesh(track(new THREE.SphereGeometry(1, 6, 4)), pathMat);
+      stone.name='QPathStone';
       stone.scale.set(s, s * .5, s);
-      stone.position.set(x, observatoryHeight(x, z) + s * .18, z);
+      stone.position.set(x, observatorySurfaceHeight(x, z) + s * .18, z);
       stone.rotation.y = random() * Math.PI;
       stone.receiveShadow = true;
       root.add(stone);
@@ -658,7 +656,7 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
     for (const spot of spots) {
       const post = add(track(new THREE.CylinderGeometry(.008, .011, spot.y - OBS.pad, 8)), m.iron);
       post.position.set(spot.x, OBS.pad + (spot.y - OBS.pad) / 2, spot.z);
-      const head = add(track(new THREE.BoxGeometry(.07, .08, .07)), m.lamp);
+      const head = add(track(new THREE.BoxGeometry(.07, .08, .07)), m.lamp, 'QPathLamp');
       head.position.set(spot.x, spot.y, spot.z);
       const light = new THREE.PointLight('#ffb96b', 0, 1.6, 1.6);
       light.position.set(spot.x, spot.y, spot.z);

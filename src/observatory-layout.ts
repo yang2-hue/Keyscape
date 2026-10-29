@@ -137,3 +137,11 @@ export type ObservatoryMaterialSpec = {
   cap: THREE.MeshStandardMaterial;
   window: THREE.MeshStandardMaterial;
 };
+
+/** Signed inset from the rounded footprint; includes the object's full radius. */
+export function observatoryInset(x:number,z:number){
+  return Math.min(OBS.halfWidth-Math.abs(x),OBS.halfDepth-Math.abs(z),OBS.corner-Math.hypot(Math.max(0,Math.abs(x)-(OBS.halfWidth-OBS.corner)),Math.max(0,Math.abs(z)-(OBS.halfDepth-OBS.corner))));
+}
+export function observatorySurfaceHeight(x:number,z:number){
+  return observatoryHeight(x,z)*smooth(observatoryInset(x,z),0,.08);
+}

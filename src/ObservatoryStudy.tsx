@@ -162,6 +162,8 @@ export default function ObservatoryStudy({ playing, moment }: { playing: boolean
   // loop damps toward it, and the DEV handle can report both.
   // Closed by default: the bowl is the letter Q, and an open shell reads as a
   // cracked egg from the gallery camera. The first click is the reveal.
+  const pathLit=useRef<boolean|null>(null);
+  const signal=useRef(0);
   const open = useRef(0);
   const openTarget = useRef(0);
   const [lamp, setLamp] = useState(false);
@@ -226,13 +228,14 @@ export default function ObservatoryStudy({ playing, moment }: { playing: boolean
       if (object.name === 'QDutyWalls' || object.name === 'QDutyWindow') object.userData.click = true;
       if (object.name === 'QTelescopeBarrel') object.userData.click = true;
       if (object.name === 'QBarrel') object.userData.click = true;
-      if (object.name === 'QCistern') object.userData.click = true;
+      if (object.name === 'QPathLamp'||object.name === 'QBeacon') object.userData.click = true;
     });
   }, [base]);
 
   useFrame((_, dt) => {
     const step = Math.min(dt, .05);
-    const active = playing ? 1 : 0;
+    const active = playing&&!document.hidden ? 1 : 0;
+    if(active)signal.current=Math.max(0,signal.current-step);
     if (active) {
       open.current = THREE.MathUtils.damp(open.current, openTarget.current, 1.15, step);
       aimValue.current.altitude = THREE.MathUtils.damp(aimValue.current.altitude, AIMS[aim].altitude, 3.4, step);
@@ -258,19 +261,20 @@ export default function ObservatoryStudy({ playing, moment }: { playing: boolean
     const wantsLamp = lamp ? 1 : preset.night ? .9 : preset.id === 'dusk' ? .65 : .12;
     lampValue.current = THREE.MathUtils.damp(lampValue.current, wantsLamp, 2.2, step);
     base.windowMaterial.emissiveIntensity = .06 + lampValue.current * 2.6;
-    base.lampMaterial.emissiveIntensity = lampValue.current * 3.2;
+    const pathLevel=pathLit.current===null?lampValue.current:pathLit.current?1:0;
+    base.lampMaterial.emissiveIntensity=pathLevel*3.2;
     // The Blender window pane carries an emission channel baked into QDutyGlow;
     // drive it directly so the interior reads lit without a second light rig.
     base.glowMaterials.forEach(material => {
       material.emissiveIntensity = .15 + lampValue.current * 2.8;
     });
-    base.lamps.forEach(light => { light.intensity = lampValue.current * 1.1; });
+    base.lamps.forEach(light => { light.intensity = pathLevel * 1.1; });
     // The red beacon pulses at night only; slow enough to read as a warning
     // light, not a disco strobe.
     const beaconOn = preset.night ? 1 : 0;
     const pulse = .55 + .45 * Math.sin(elapsed.current * 1.7);
     base.beaconMaterial.emissiveIntensity = THREE.MathUtils.damp(
-      base.beaconMaterial.emissiveIntensity, beaconOn * (1.6 + pulse * 1.2), 3, step,
+      base.beaconMaterial.emissiveIntensity, signal.current>0?(Math.sin(signal.current*Math.PI*2)>0?5:0):beaconOn * (1.6 + pulse * 1.2), 8, active?step:0,
     );
     // A search sweep overrides the aim preset: pan smoothly through a wide
     // azimuth while the tube rides a slow sine, then release back to the preset.
@@ -306,7 +310,7 @@ export default function ObservatoryStudy({ playing, moment }: { playing: boolean
       const d = gl.domElement.dataset;
       d.qDomeOpen = open.current.toFixed(3);
       d.qDomeIntent = intent.current;
-      d.qLamp = String(lamp);
+      d.qLamp = String(lamp);d.qPathLamp=String(pathLit.current);d.qSignal=signal.current.toFixed(3);
       d.qAim = String(aim);
       d.qBusy = busy.current.toFixed(2);
       d.qAltitude = aimValue.current.altitude.toFixed(3);
@@ -341,17 +345,19 @@ export default function ObservatoryStudy({ playing, moment }: { playing: boolean
 
   return <>
     <primitive object={base.root} dispose={null} onClick={(event: ThreeEvent<MouseEvent>) => {
+      if(!playing||document.hidden||event.delta>6)return;
       const clicked = (event.object as THREE.Mesh).userData.click ? event.object.name : '';
       if (clicked.startsWith('QDome')) toggleDome(event);
       else if (clicked.startsWith('QDuty')) toggleLamp(event);
       else if (clicked.startsWith('QTelescope')) startSweep(event);
       else if (clicked.startsWith('QBarrel')) toggleBarrel(event);
-      else if (clicked.startsWith('QCistern')) toggleBarrel(event);
+      else if(clicked==='QPathLamp'){event.stopPropagation();pathLit.current=!(pathLit.current??preset.night);}
+      else if(clicked==='QBeacon'){event.stopPropagation();signal.current=3;}
     }} onPointerOver={(event: ThreeEvent<PointerEvent>) => {
       if ((event.object as THREE.Mesh).userData.click) gl.domElement.style.cursor = 'pointer';
     }} onPointerOut={() => { gl.domElement.style.cursor = ''; }} />
-    <Stars level={preset.stars} />
-    <Grit level={preset.dust} />
+    <group visible={preset.stars>0}><Stars level={preset.stars} /></group>
+    <group visible={moment==='wind'}><Grit level={moment==='wind'?preset.dust:0} /></group>
   </>;
 }
 
