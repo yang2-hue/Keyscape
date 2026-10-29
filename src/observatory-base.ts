@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { OBS, SITE, bridgePath, observatoryHeight, observatoryInset, observatorySurfaceHeight, outlinePoint } from './observatory-layout';
+import { groundMaps, plasticGrain, rockGeometry } from './observatory-materials';
+import { noise2 } from './lunar-layout';
 import { seeded } from './coastal-materials';
 
 type Quality = 'full' | 'software';
@@ -64,6 +66,7 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
 
   const geometries: THREE.BufferGeometry[] = [];
   const materials: THREE.Material[] = [];
+  const textures: THREE.Texture[] = [];
   const track = <T extends THREE.BufferGeometry>(geometry: T) => { geometries.push(geometry); return geometry; };
   const own = <T extends THREE.Material>(m: T) => { materials.push(m); return m; };
 
@@ -77,12 +80,25 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
     glass: own(new THREE.MeshStandardMaterial({ color: PALETTE.glass, roughness: .12, metalness: .35, side: THREE.DoubleSide })),
     wood: own(material(PALETTE.wood, .75)),
     rock: own(material(PALETTE.rock, .92)),
-    cap: own(material(PALETTE.cap, .7)),
     capTrim: own(material(PALETTE.capTrim, .74)),
     bridgeStone: own(material('#96907f', .88)),
     window: own(new THREE.MeshStandardMaterial({ color: '#3a2c1c', emissive: new THREE.Color(PALETTE.warm), emissiveIntensity: .1, roughness: .5 })),
     lamp: own(new THREE.MeshStandardMaterial({ color: '#4c4335', emissive: new THREE.Color('#ffbd73'), emissiveIntensity: 0, roughness: .5 })),
   };
+
+  // One tile serves the ground; the stonework takes a clone at its own repeat
+  // so a metre of parapet and a metre of soil do not share a grain scale.
+  const ground = groundMaps(quality);
+  textures.push(ground.map, ground.normal, ground.rough);
+  const stoneGrain = ground.normal.clone();
+  stoneGrain.repeat.set(1.4, 1.4);
+  stoneGrain.needsUpdate = true;
+  textures.push(stoneGrain);
+  for (const stone of [m.bridgeStone, m.rock]) {
+    stone.normalMap = stoneGrain;
+    stone.normalScale = new THREE.Vector2(.85, .85);
+    stone.roughness = .92;
+  }
 
   const add = (geometry: THREE.BufferGeometry, material: THREE.Material, name?: string) => {
     track(geometry);
@@ -105,6 +121,8 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
   // Open shell again: an extruded prism would cap the top and that lid would
   // show through the gorge as a pale floor.
   const segX = quality === 'full' ? 260 : 120, segZ = quality === 'full' ? 196 : 88;
+  const grain = plasticGrain(quality === 'full' ? 256 : 128);
+  textures.push(grain);
   // Match the terrain grid's actual boundary, including rounded-corner samples.
   const outline:THREE.Vector2[]=[];
   const edge=(x:number,z:number)=>{const p=outlinePoint(x,z);outline.push(new THREE.Vector2(...p));};
@@ -113,7 +131,8 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
   for(let i=0;i<segZ;i++)edge(-OBS.halfWidth,OBS.halfDepth-2*OBS.halfDepth*i/segZ);
   for(let i=0;i<segX;i++)edge(-OBS.halfWidth+2*OBS.halfWidth*i/segX,-OBS.halfDepth);
   {
-    const position: number[] = [], normal: number[] = [], uv: number[] = [], index: number[] = [];
+    const position: number[] = [], normal: number[] = [], uv: number[] = [], index: number[] = [], colors: number[] = [];
+    let arc = 0;
     for (let i = 0; i < outline.length; i++) {
       const a = outline[i], b = outline[(i + 1) % outline.length];
       const dx = b.x - a.x, dz = b.y - a.y, len = Math.hypot(dx, dz) || 1;
@@ -121,15 +140,31 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
       const base = position.length / 3;
       position.push(a.x, 0, a.y, b.x, 0, b.y, b.x, -OBS.base, b.y, a.x, -OBS.base, a.y);
       for (let k = 0; k < 4; k++) normal.push(nx, 0, nz);
-      uv.push(0, 1, 1, 1, 1, 0, 0, 0);
+      // UVs in world units, not per-quad: a per-quad 0..1 flattens a square
+      // grain into a vertical smear on these thin, tall segments.
+      uv.push(arc, 0, arc + len, 0, arc + len, OBS.base, arc, OBS.base);
+      arc += len;
+      // The wall falls off toward the ground: the top edge is the lit lip of
+      // the cap and the bottom sits in its own shadow. Two values per quad
+      // interpolate into a continuous band around the whole key.
+      const top = 1.0, foot = .70;
+      colors.push(top, top, top, top, top, top, foot, foot, foot, foot, foot, foot);
       index.push(base, base + 1, base + 2, base, base + 2, base + 3);
     }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(position, 3));
     geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normal, 3));
     geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     geometry.setIndex(index);
-    add(geometry, m.cap, 'QKeycapBody');
+    const shellMaterial = own(new THREE.MeshStandardMaterial({
+      color: PALETTE.cap, roughness: .8,
+      // A hair of sideways grain: a vertical wall under one ambient term has no
+      // shading gradient of its own, so a smooth one renders as a flat band.
+      normalMap: grain, normalScale: new THREE.Vector2(.11, .11),
+      vertexColors: true,
+    }));
+    add(geometry, shellMaterial, 'QKeycapBody');
   }
   {
     const bottom = track(new THREE.ShapeGeometry(new THREE.Shape(outline), 2));
@@ -139,64 +174,168 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
   }
 
   // ---- terrain ----------------------------------------------------------
+  // Three layers stacked: a tiled detail triple for the grain of the soil, a
+  // vertex colour that carries the regions (bare rock, moss, silt, dust), and
+  // the height field itself. Any one of them alone reads as clay.
   {
     const plane = track(new THREE.PlaneGeometry(OBS.halfWidth * 2, OBS.halfDepth * 2, segX, segZ));
     plane.rotateX(-Math.PI / 2);
     const position = plane.attributes.position;
     const colors: number[] = [];
-    const base = new THREE.Color(PALETTE.rock);
-    const light = new THREE.Color(PALETTE.rockLight);
+    const soil = new THREE.Color('#756f61');
+    const dust = new THREE.Color('#9a9280');
+    const bare = new THREE.Color('#a29c8b');
+    const moss = new THREE.Color('#5a6047');
+    const silt = new THREE.Color('#4f4a3e');
+    const c = new THREE.Color();
+    const slopeAt = (x: number, z: number) => {
+      const e = 0.035;
+      const dx = observatorySurfaceHeight(x + e, z) - observatorySurfaceHeight(x - e, z);
+      const dz = observatorySurfaceHeight(x, z + e) - observatorySurfaceHeight(x, z - e);
+      return Math.hypot(dx, dz) / (2 * e);
+    };
     for (let i = 0; i < position.count; i++) {
       const [x, z] = outlinePoint(position.getX(i), position.getZ(i));
-      const h = observatorySurfaceHeight(x,z);
+      const h = observatorySurfaceHeight(x, z);
       position.setXYZ(i, x, h, z);
-      const tint = THREE.MathUtils.clamp(0.5 + 0.9 * (h - OBS.pad), 0, 1);
-      const c = base.clone().lerp(light, tint * .55);
-      // Damp the gorge floor: dust and shadow collect there.
-      const c2 = c.multiplyScalar(0.78 + 0.22 * THREE.MathUtils.clamp(h / 0.12, 0, 1));
-      colors.push(c2.r, c2.g, c2.b);
+
+      const rise = h - OBS.pad;
+      const slope = slopeAt(x, z);
+      // Region weights. Patches are driven by noise, never by height alone:
+      // a height-only ramp is exactly the gradient that made the old surface
+      // read as a single moulded sheet.
+      const region = noise2(x * 1.15 + 21.3, z * 1.15 - 12.7);
+      const patch = noise2(x * 3.4 + 11.4, z * 3.4 - 6.1);
+      const mottle = noise2(x * 9.5 - 4.2, z * 9.5 + 8.7);
+      const steep = THREE.MathUtils.clamp((slope - 0.28) / 0.55, 0, 1);
+      const hollow = THREE.MathUtils.clamp(1 - rise / 0.035, 0, 1);
+      // Two fields on opposite sides of the same noise: a stony wash where the
+      // region value runs high, and a mat of dry grass where it runs low.
+      const scree = THREE.MathUtils.clamp((region - 0.02) / 0.26, 0, 1);
+      const meadow = THREE.MathUtils.clamp((-region - 0.04) / 0.28, 0, 1);
+      const green = meadow * (1 - steep) * THREE.MathUtils.clamp(1 - rise * 3.2, 0, 1);
+
+      c.copy(soil);
+      c.lerp(dust, THREE.MathUtils.clamp((rise + 0.05) / 0.22, 0, 1) * 0.45);
+      c.lerp(bare, steep * 0.85 + scree * 0.35);
+      c.lerp(moss, green * 0.6);
+      c.lerp(silt, hollow * 0.55);
+      // Gravel speckle: the detail map supplies the pattern, this just varies
+      // how much of it lands on rock versus on dust.
+      const fleck = (mottle * 0.45 + patch * 0.35 + 0.5) * 0.14;
+      c.multiplyScalar(0.93 + fleck - hollow * 0.05);
+      // Contact shading: the ground closes in around every footing.
+      const dr = Math.hypot(x - SITE.drum.x, z - SITE.drum.z) - SITE.drum.radius;
+      c.multiplyScalar(0.80 + 0.20 * THREE.MathUtils.clamp(dr / 0.22, 0, 1));
+      const underBridge = THREE.MathUtils.clamp(
+        1 - Math.hypot(x - (SITE.bridge.door.x + SITE.bridge.landing.x) / 2, z - (SITE.bridge.door.z + SITE.bridge.landing.z) / 2) / 0.30, 0, 1,
+      );
+      c.multiplyScalar(1 - underBridge * 0.24);
+      colors.push(c.r, c.g, c.b);
     }
     plane.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     plane.computeVertexNormals();
-    const terrainMaterial = own(new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .95, vertexColors: true }));
+    const terrainMaterial = own(new THREE.MeshStandardMaterial({
+      color: '#ffffff',
+      roughness: 1,
+      vertexColors: true,
+      map: ground.map,
+      normalMap: ground.normal,
+      normalScale: new THREE.Vector2(1.0, 1.0),
+      roughnessMap: ground.rough,
+    }));
     const terrain = add(plane, terrainMaterial, 'QTerrain');
     terrain.castShadow = false;
   }
 
   // ---- rock field -------------------------------------------------------
+  // Three broken-up variants instead of one displaced sphere, so the field has
+  // no repeated silhouette. Sizes follow a power law: a handful of heroes, a
+  // long tail of chips, which is how scree actually sorts.
   {
-    const rockGeometry = track(new THREE.SphereGeometry(1, 18, 12));
-    const positions = rockGeometry.attributes.position;
-    for (let i = 0; i < positions.count; i++) {
-      const v = new THREE.Vector3().fromBufferAttribute(positions, i);
-      const n = 1 + .24 * Math.sin(v.x * 3.9 + v.z * 3.1) + .13 * Math.sin(v.y * 5.3 + v.x * 2.3);
-      v.multiplyScalar(n);
-      positions.setXYZ(i, v.x, v.y * .72, v.z);
-    }
-    rockGeometry.computeVertexNormals();
+    const blockers = (x: number, z: number, size: number) => {
+      if (Math.hypot(x - SITE.drum.x, z - SITE.drum.z) < SITE.drum.radius * 1.04) return true;
+      if (Math.abs(x - SITE.duty.x) < .30 && Math.abs(z - SITE.duty.z) < .28) return true;
+      if (Math.abs(x - (SITE.bridge.door.x + SITE.bridge.landing.x) / 2) < .34
+        && Math.abs(z - (SITE.bridge.door.z + SITE.bridge.landing.z) / 2) < .30) return true;
+      return observatoryInset(x, z) < size * 1.5 + .015;
+    };
     const random = seeded(20261029);
-    const spots: { x: number; z: number; s: number }[] = [];
-    for (let i = 0; i < 90; i++) {
-      const angle = random() * Math.PI * 2;
-      const x = Math.cos(angle) * (OBS.halfWidth - .12) * (.62 + random() * .34);
-      const z = Math.sin(angle) * (OBS.halfDepth - .10) * (.62 + random() * .34);
-      const nearDrum = Math.hypot(x - SITE.drum.x, z - SITE.drum.z) < SITE.drum.radius * 1.04;
-      const nearDuty = Math.abs(x - SITE.duty.x) < .30 && Math.abs(z - SITE.duty.z) < .28;
-      const onBridge = Math.abs(x - (SITE.bridge.door.x + SITE.bridge.landing.x) / 2) < .34
-        && Math.abs(z - (SITE.bridge.door.z + SITE.bridge.landing.z) / 2) < .30;
-      if (nearDrum || nearDuty || onBridge) continue;
-      const size=.035+random()*.075;
-      if(observatoryInset(x,z)<size*1.5+.015)continue;
-      spots.push({x,z,s:size});
+    const variants = [
+      { geometry: rockGeometry(4801, quality), color: '#6d675c' },
+      { geometry: rockGeometry(9133, quality), color: '#5f5a51' },
+      { geometry: rockGeometry(2277, quality), color: '#7b7468' },
+    ];
+    const buckets: { x: number; z: number; s: number; tilt: number; yaw: number }[][] = [[], [], []];
+    const place = (count: number, floor: number, ceiling: number) => {
+      for (let i = 0; i < count; i++) {
+        const angle = random() * Math.PI * 2;
+        const x = Math.cos(angle) * (OBS.halfWidth - .12) * (.62 + random() * .34);
+        const z = Math.sin(angle) * (OBS.halfDepth - .10) * (.62 + random() * .34);
+        const size = floor + Math.pow(random(), 2.2) * (ceiling - floor);
+        if (blockers(x, z, size)) continue;
+        buckets[Math.floor(random() * variants.length)].push({ x, z, s: size, tilt: (random() - .5) * .5, yaw: random() * Math.PI * 2 });
+      }
+    };
+    place(quality === 'full' ? 150 : 60, .012, .105);
+    // A rubble apron along the tail: the ground under a deck collects what
+    // falls off it, and it hides the footing's meeting with the soil.
+    for (let i = 0; i < 34; i++) {
+      const t = random();
+      const x = THREE.MathUtils.lerp(SITE.bridge.door.x, SITE.bridge.landing.x, t) + (random() - .5) * .34;
+      const z = THREE.MathUtils.lerp(SITE.bridge.door.z, SITE.bridge.landing.z, t) + (random() - .5) * .30;
+      const size = .010 + random() * .026;
+      if (blockers(x, z, size)) continue;
+      buckets[i % variants.length].push({ x, z, s: size, tilt: (random() - .5) * .7, yaw: random() * Math.PI * 2 });
     }
-    const instanced = new THREE.InstancedMesh(rockGeometry, m.rock, spots.length);
-    instanced.name = 'QRocks';
-    instanced.castShadow = true; instanced.receiveShadow = true;
+
+    const matrix = new THREE.Matrix4(), quat = new THREE.Quaternion(), scale = new THREE.Vector3(), pos = new THREE.Vector3();
+    variants.forEach((variant, index) => {
+      const spots = buckets[index];
+      if (!spots.length) return;
+      const rockMat = own(material(variant.color, .93));
+      const instanced = new THREE.InstancedMesh(track(variant.geometry), rockMat, spots.length);
+      instanced.name = `QRocks${index}`;
+      instanced.castShadow = true; instanced.receiveShadow = true;
+      spots.forEach((spot, i) => {
+        // Sunk a third of the way in: a boulder resting on the surface is the
+        // single clearest tell that a rock field was dropped in from above.
+        pos.set(spot.x, observatorySurfaceHeight(spot.x, spot.z) + spot.s * .30, spot.z);
+        quat.setFromEuler(new THREE.Euler(spot.tilt, spot.yaw, spot.s * 1.7));
+        scale.set(spot.s * (.85 + (i % 5) * .06), spot.s * .8, spot.s * 1.06);
+        matrix.compose(pos, quat, scale);
+        instanced.setMatrixAt(i, matrix);
+      });
+      instanced.instanceMatrix.needsUpdate = true;
+      root.add(instanced);
+    });
+  }
+
+  // ---- scree and gravel -------------------------------------------------
+  // The tiling map supplies colour, not silhouette: without loose stones lying
+  // on top, every slope still reads as painted-on texture at close range.
+  {
+    const random = seeded(2026102914);
+    const chip = track(new THREE.IcosahedronGeometry(1, 0));
+    const chipMat = own(material('#7d766a', .95));
+    const count = quality === 'full' ? 520 : 180;
+    const spots: { x: number; z: number; s: number }[] = [];
+    for (let i = 0; i < count; i++) {
+      const x = (random() - .5) * (OBS.halfWidth * 2 - .16);
+      const z = (random() - .5) * (OBS.halfDepth * 2 - .14);
+      const s = .005 + Math.pow(random(), 2) * .013;
+      if (Math.hypot(x - SITE.drum.x, z - SITE.drum.z) < SITE.drum.radius * 1.01) continue;
+      if (observatoryInset(x, z) < s + .02) continue;
+      spots.push({ x, z, s });
+    }
+    const instanced = new THREE.InstancedMesh(chip, chipMat, spots.length);
+    instanced.name = 'QGravel';
+    instanced.castShadow = false; instanced.receiveShadow = true;
     const matrix = new THREE.Matrix4(), quat = new THREE.Quaternion(), scale = new THREE.Vector3(), pos = new THREE.Vector3();
     spots.forEach((spot, i) => {
-      pos.set(spot.x, observatorySurfaceHeight(spot.x, spot.z) + spot.s * .42, spot.z);
-      quat.setFromEuler(new THREE.Euler(spot.s * 2.1, spot.s * 7.3, spot.s * 1.7));
-      scale.set(spot.s, spot.s * .82, spot.s * 1.05);
+      pos.set(spot.x, observatorySurfaceHeight(spot.x, spot.z) + spot.s * .34, spot.z);
+      quat.setFromEuler(new THREE.Euler(random() * 3, random() * 6.3, random() * 3));
+      scale.set(spot.s, spot.s * .55, spot.s * 1.1);
       matrix.compose(pos, quat, scale);
       instanced.setMatrixAt(i, matrix);
     });
@@ -414,30 +553,49 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
   }
 
   // ---- bridge -----------------------------------------------------------
+  // A single extruded ribbon with one flat tone was the flattest thing on the
+  // key. Real masonry reads through its joints: courses of slightly different
+  // stone, a coping that oversails the parapet, and beams you can see from
+  // underneath when you stand in the hollow.
   {
     const path = bridgePath(10);
     const bridge = new THREE.Group();
     bridge.name = 'QBridge';
     root.add(bridge);
+    const courses = [
+      own(material('#9b9583', .9)),
+      own(material('#8d8776', .92)),
+      own(material('#a49e8c', .88)),
+    ];
+    const coping = own(material('#b0a996', .86));
     for (let i = 0; i < path.length - 1; i++) {
       const a = path[i], b = path[i + 1];
       const dx = b.x - a.x, dz = b.z - a.z;
       const length = Math.hypot(dx, dz);
       const angle = Math.atan2(dz, dx);
       const mid = new THREE.Vector3().addVectors(a, b).multiplyScalar(.5);
-      const deck = put(bridge, new THREE.BoxGeometry(length + .02, .06, SITE.bridge.halfWidth * 2), m.bridgeStone);
+      const tone = courses[i % courses.length];
+      const deck = put(bridge, new THREE.BoxGeometry(length + .02, .06, SITE.bridge.halfWidth * 2), tone);
       deck.position.copy(mid);
       deck.rotation.y = -angle;
       for (const side of [-1, 1]) {
-        const wall = put(bridge, new THREE.BoxGeometry(length + .02, .12, .035), m.bridgeStone);
-        wall.position.set(mid.x, mid.y + .08, mid.z);
+        const wall = put(bridge, new THREE.BoxGeometry(length + .02, .11, .034), tone);
+        wall.position.set(mid.x, mid.y + .075, mid.z);
         wall.rotation.y = -angle;
         wall.translateZ(side * SITE.bridge.halfWidth);
+        // Coping oversails the wall on both faces: the shadow line under it is
+        // what separates a parapet from a slab standing on end.
+        const cap = put(bridge, new THREE.BoxGeometry(length + .02, .022, .046), coping);
+        cap.position.set(mid.x, mid.y + .141, mid.z);
+        cap.rotation.y = -angle;
+        cap.translateZ(side * SITE.bridge.halfWidth);
       }
     }
     // Landing: a round pad that overhangs the keycap lip, carried on a corbel.
     const landing = put(bridge, new THREE.CylinderGeometry(SITE.bridge.landingRadius, SITE.bridge.landingRadius, .06, 28), m.bridgeStone, 'QBridgeLanding');
     landing.position.set(SITE.bridge.landing.x, SITE.bridge.deckY - .02, SITE.bridge.landing.z);
+    const rim = put(bridge, new THREE.CylinderGeometry(SITE.bridge.landingRadius + .008, SITE.bridge.landingRadius + .008, .022, 28), coping);
+    rim.position.set(SITE.bridge.landing.x, SITE.bridge.deckY - .006, SITE.bridge.landing.z);
     const parapet = put(bridge, new THREE.TorusGeometry(SITE.bridge.landingRadius - .012, .007, 6, 28), m.iron);
     parapet.rotation.x = Math.PI / 2;
     parapet.position.set(SITE.bridge.landing.x, SITE.bridge.deckY + .12, SITE.bridge.landing.z);
@@ -450,15 +608,22 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
     const landingGround=observatorySurfaceHeight(SITE.bridge.landing.x,SITE.bridge.landing.z);
     const footingTop=SITE.bridge.deckY-.05;
     const footingBottom=landingGround-.015;
-    const corbel = put(bridge, new THREE.CylinderGeometry(.11, .14, footingTop-footingBottom, 20), m.bridgeStone,'QBridgeFooting');
+    const corbel = put(bridge, new THREE.CylinderGeometry(.085, .122, footingTop-footingBottom, 20), m.bridgeStone,'QBridgeFooting');
     corbel.position.set(SITE.bridge.landing.x,(footingTop+footingBottom)/2,SITE.bridge.landing.z);
-    // Two piers standing in the gorge.
+    // A splayed plinth keeps the pier from reading as a plant pot.
+    const plinth = put(bridge, new THREE.CylinderGeometry(.132, .148, .026, 20), m.bridgeStone);
+    plinth.position.set(SITE.bridge.landing.x, footingBottom + .013, SITE.bridge.landing.z);
+    // Two piers standing in the gorge. They batter outward toward the ground and
+    // carry a cap stone, the way a rubble pier is actually built.
     for (const t of [.34, .66]) {
       const p = new THREE.Vector3().lerpVectors(path[0], path[path.length - 1], t);
       const ground = observatorySurfaceHeight(p.x, p.z);
       const height = Math.max(.08, p.y - ground);
-      const pier = put(bridge, new THREE.BoxGeometry(.10, height, .10), m.bridgeStone);
+      const pier = put(bridge, new THREE.CylinderGeometry(.048, .072, height, 4), m.bridgeStone, 'QBridgePier');
       pier.position.set(p.x, ground + height / 2, p.z);
+      pier.rotation.y = Math.PI / 4;
+      const cap = put(bridge, new THREE.BoxGeometry(.135, .022, .135), coping);
+      cap.position.set(p.x, ground + height - .011, p.z);
     }
   }
 
@@ -554,8 +719,8 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
       g.computeVertexNormals();
       return g;
     })();
-    const grassMat = own(material('#5b6a44', .95));
-    const mossMat = own(material('#4c5a3c', .98));
+    const grassMat = own(material('#5e6349', .95));
+    const mossMat = own(material('#4e5340', .98));
     const n = quality === 'full' ? 120 : 50;
     for (let i = 0; i < n; i++) {
       const x = (random() - .5) * (OBS.halfWidth * 2 - .3);
@@ -684,6 +849,7 @@ export function createObservatoryBase(quality: Quality = 'full', assets: Observa
   const dispose = () => {
     geometries.forEach(geometry => geometry.dispose());
     materials.forEach(material => material.dispose());
+    textures.forEach(texture => texture.dispose());
   };
 
   return {

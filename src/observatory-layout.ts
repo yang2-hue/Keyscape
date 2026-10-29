@@ -94,6 +94,25 @@ export function observatoryHeight(x: number, z: number) {
   h += 0.018 * (noise2(x * 2.9 + 1.7, z * 2.9 - 2.4) - 0.5);
   h += 0.010 * (noise2(x * 6.7 - 5.1, z * 6.7 + 3.3) - 0.5);
   h += 0.005 * (noise2(x * 13.1 + 8.3, z * 13.1 - 6.7) - 0.5);
+  // Clods and hummocks. The octaves above are all longer than half the key, so
+  // without these the ground is mathematically smooth: shading never breaks,
+  // and a smooth surface lit by one lamp always reads as moulded plastic.
+  h += 0.010 * (noise2(x * 21.3 - 3.3, z * 21.3 + 7.7) - 0.5);
+  h += 0.005 * (noise2(x * 41.7 + 2.4, z * 41.7 - 5.1) - 0.5);
+  // Gullies. A uniform slope with noise sprinkled on it still reads as a ramp;
+  // water cuts narrow channels down the fall line, and those channels are the
+  // only cue that says "this surface has been rained on for a century".
+  const fall = smooth(z, -0.15, -0.95);
+  if (fall > 0) {
+    const channel = Math.abs(noise2(x * 3.4 - 7.7, z * 2.2 + 2.2));
+    const depth = 1 - smooth(channel, 0.03, 0.22);
+    h -= 0.055 * fall * depth;
+  }
+  // A second knoll to the east: one hill and one flat shelf is a diagram, two
+  // unequal bumps is a place. Keeping it low means the duty room still reads
+  // against sky rather than against a wall of ground.
+  const knoll = Math.hypot((x - 1.02) / 0.62, (z + 0.16) / 0.52);
+  h += 0.075 * (1 - smooth(knoll, 0.1, 1.0)) * (0.7 + 0.5 * noise2(x * 4.1 + 5.5, z * 4.1 - 2.2));
   // The gorge under the tail.
   h -= gorgeDepth(x, z);
   // Flatten under the building, the duty room and the landing so nothing tilts.
@@ -142,6 +161,17 @@ export type ObservatoryMaterialSpec = {
 export function observatoryInset(x:number,z:number){
   return Math.min(OBS.halfWidth-Math.abs(x),OBS.halfDepth-Math.abs(z),OBS.corner-Math.hypot(Math.max(0,Math.abs(x)-(OBS.halfWidth-OBS.corner)),Math.max(0,Math.abs(z)-(OBS.halfDepth-OBS.corner))));
 }
+/** Terrain as drawn: the height field, tapered to zero exactly on the keycap
+ * outline so no vertex can poke through the side wall, plus a raised lip just
+ * inside it. Without the lip the soil slides over the rim as a razor edge and
+ * the whole key reads as a neat cake; with it there is a horizon line where
+ * earth stops and the keycap starts. */
 export function observatorySurfaceHeight(x:number,z:number){
-  return observatoryHeight(x,z)*smooth(observatoryInset(x,z),0,.08);
+  const inset=observatoryInset(x,z);
+  const lip=smooth(inset,.018,.10)*(1-smooth(inset,.10,.24));
+  // Intermittent, not a continuous ribbon: a perfectly even lip is just a
+  // highlight ring around the key, which is the cake look again. Soil sits in
+  // drifts, so the lip has to appear and vanish along the run.
+  const jitter=smooth(noise2(x*6.7-3.1,z*6.7+6.4),-.12,.26);
+  return observatoryHeight(x,z)*smooth(inset,0,.08)+.020*lip*(.25+.95*jitter);
 }
