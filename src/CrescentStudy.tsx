@@ -12,6 +12,7 @@ import {Weather} from './weather';
 import {isWet,type WeatherKind} from './weather-model';
 import {toggleCottageLight,cottageLightTarget,type CoastalAction,type CoastalActionKind} from './coastal-interactions';
 import HarborGull from './HarborGull';
+import CoastalMist from './coastal-mist';
 
 /** Module-level constant: an inline array literal would change identity on
  * every render, rebuild the water uniforms and reset their damped values. */
@@ -106,6 +107,9 @@ export default function CrescentStudy({playing,night,weather,action}:{playing:bo
     if(!action||action.id===lastAction.current)return;
     lastAction.current=action.id;act(action.kind);
   },[action,act]);
+  // Mist only exists after dark. The morning scenes used to carry a flat grey
+  // veil; that is gone from the presets, and this stays at zero in daylight.
+  const mistLevel=useRef(0);
   const startle=useRef(0);
   const startleAt=useRef(new THREE.Vector2(BERTH.x,BERTH.z));
   const hovering=useRef(false);
@@ -335,7 +339,12 @@ export default function CrescentStudy({playing,night,weather,action}:{playing:bo
     // Evening lantern glow: light and halo breathe very slightly, never flicker hard.
     const glow=night?.95+.035*Math.sin(t*1.7):pulse*2.6;
     study.lanternLight.intensity=THREE.MathUtils.damp(study.lanternLight.intensity,glow,3,delta);
-    study.haloMaterial.opacity=THREE.MathUtils.damp(study.haloMaterial.opacity,night?.34+.025*Math.sin(t*1.7+.6):pulse*.75,3,delta);
+    // Mist is the one case where the lamp should bloom hard: the fog around it
+    // is the surface the light is actually scattering off.
+    const halo=study.lanternHalo;
+    const misty=mistLevel.current;
+    study.haloMaterial.opacity=THREE.MathUtils.damp(study.haloMaterial.opacity,night?.34+misty*.40+.025*Math.sin(t*1.7+.6):pulse*.75,3,delta);
+    if(halo)halo.scale.setScalar(.34+misty*.26);
     study.windowMaterials.forEach((material,i)=>{
       const lit=cottageLightTarget(cottageOverrides.current[i],night);
       // Manual fades freeze with simulation; automatic weather lighting can
@@ -347,8 +356,10 @@ export default function CrescentStudy({playing,night,weather,action}:{playing:bo
     });
     // Beam sweeps faster while flashing, and is only visible when lit.
     if(playing)study.beacon.rotation.y+=delta*(pulse>0?.95:.24);
-    study.setBeamStrength(THREE.MathUtils.damp(study.beamMaterial.uniforms.strength.value,night?1:pulse*.85,3,delta));
+    study.setBeamStrength(THREE.MathUtils.damp(study.beamMaterial.uniforms.strength.value,night?1+mistLevel.current*.55:pulse*.85,3,delta));
     study.beamMaterial.uniforms.haze.value=THREE.MathUtils.damp(study.beamMaterial.uniforms.haze.value,weather==='mist'?1.8:rainy?1.2:.8,3,delta);
+    const mistTarget=night?(weather==='mist'?1:weather==='rain'?.4:.15):0;
+    mistLevel.current=THREE.MathUtils.damp(mistLevel.current,mistTarget,2.2,Math.min(delta,.05));
     study.searchLight.intensity=THREE.MathUtils.damp(study.searchLight.intensity,night?3.5:pulse*3.5,3,delta);
     if(import.meta.env.DEV){
       const d=gl.domElement.dataset;d.beaconAngle=String(study.beacon.rotation.y);d.beaconStrength=String(study.beamMaterial.uniforms.strength.value);d.lanternEmissive=String(study.lanternMaterial.emissiveIntensity);d.searchLightIntensity=String(study.searchLight.intensity);
@@ -369,6 +380,7 @@ export default function CrescentStudy({playing,night,weather,action}:{playing:bo
     <primitive object={hitProxy} onClick={onClick} onPointerMove={onMove} onPointerOut={onOut}/>
     <HarborWater field={field} footprint={study.footprint} playing={playing} evening={night} rainy={rainy} dynamics={dynamics} deepTint={1} swellAmp={.016} swellDir={SWELL_DIR} onSplash={scare}/>
     <Weather field={field} playing={playing} rainy={rainy}/>
+    <CoastalMist level={mistLevel} field={field} water={HARBOR.water} center={[CRESCENT.cx,CRESCENT.cz]}/>
     <HarborGull playing={playing} trigger={gullTrigger}/>
   </group>;
 }

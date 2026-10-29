@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import {seeded} from './coastal-materials.ts';
 import {keepAccessClear,ACCESS_CENTER} from './crescent-access.ts';
 import {beachInfluence} from './coastal-composition.ts';
-import {roundedSquarePoint} from './harbor-layout.ts';
+import {HARBOR,roundedSquarePoint} from './harbor-layout.ts';
 
 /** Jointed limestone: broad planes, chipped shoulders and thin bedding ledges.
  * Keep the geometry shared by instances; colour/scale still vary per outcrop. */
@@ -42,7 +42,20 @@ export function sculptCliffs(g:THREE.PlaneGeometry){
     const fracture=Math.sin(x*29+z*23)*Math.cos(h*19+z*7);
     const relief=(bedding*.04+fracture*.02)*weight;
     const [px,pz]=roundedSquarePoint(x-gx/slope*relief,z-gz/slope*relief);
-    p.setXYZ(k,px,h+fracture*.008*weight,pz);
+    // Horizontal bedding. A heightfield can only ever be a slope, and a slope
+    // with noise sprinkled on it still reads as a moulded ramp — which is what
+    // the sea cliffs looked like. Limestone weathers into shelves, so quantise
+    // the height into irregular courses: the flat runs become ledges and the
+    // one-cell jumps between them become the risers a real cliff has.
+    const course=.072+.028*Math.sin(x*4.1+z*3.3)+.014*Math.sin(z*9.7-x*6.1);
+    const shelf=Math.round(h/course)*course;
+    // Keep well clear of the tideline. The flat sand spit sits only a couple of
+    // centimetres above the water, so a course boundary snapping it down turned
+    // the beach into seabed on the first attempt. Bedding only bites where there
+    // is a tall face to put it on.
+    const dry=THREE.MathUtils.smoothstep(h,HARBOR.water+.11,HARBOR.water+.27);
+    const ledge=(shelf-h)*weight*dry*.92;
+    p.setXYZ(k,px,h+ledge+fracture*.008*weight,pz);
   }
 }
 

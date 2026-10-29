@@ -25,7 +25,10 @@ a{color:inherit;text-decoration:none}::selection{background:#7d879640}
 .gallery.observatory-night{--paper:#060708;--ink:#f3f1ed;--ink-muted:#adb6c2;background-image:radial-gradient(ellipse at 50% 56%,#111821 0%,#040506 74%)}
 .gallery.observatory-dawn{--paper:#d8e5ee;--ink:#25333d;--ink-muted:#536775;background-image:linear-gradient(180deg,#b5cfe3 0%,#e2e9eb 62%,#f1dfcd 100%)}
 .gallery.observatory-wind{--paper:#d9d5c9;--ink:#34382f;--ink-muted:#686b60;background-image:linear-gradient(180deg,#bfcbd0 0%,#deddd3 65%,#d1c4aa 100%)}
-.gallery.night{--paper:#050607;--ink:#f4f5f6;--ink-muted:#a8adb4;--ink-faint:#9299a2;--hairline:#ffffff24;--hairline-strong:#ffffff44;--panel:#111315;--veil:#050607ed;--accent:#f4f5f6;--surface-hover:#ffffff12;--surface-press:#ffffff20}
+.gallery.night{--paper:#09121a;--ink:#f2f4f6;--ink-muted:#a3adb8;--ink-faint:#8b96a1;--hairline:#ffffff24;--hairline-strong:#ffffff44;--panel:#0f1720;--veil:#070c11ed;--accent:#eef2f6;--surface-hover:#ffffff12;--surface-press:#ffffff20;
+  /* A flat #050607 read as a black void with an object floating in it. A night
+     sea has a horizon: cold light coming off the water, going to ink overhead. */
+  background-image:radial-gradient(ellipse 132% 92% at 50% 63%,#1e3548 0%,#132430 26%,#0a141c 52%,#050b10 100%)}
 .masthead{position:absolute;top:32px;left:40px;right:40px;display:flex;align-items:center;justify-content:space-between;z-index:3;pointer-events:none}
 .wordmark{font-size:28px;letter-spacing:-1.5px;font-weight:550;line-height:1.15;pointer-events:auto}
 .art-stage{position:absolute;inset:3% 4% 6%;touch-action:none;cursor:grab}

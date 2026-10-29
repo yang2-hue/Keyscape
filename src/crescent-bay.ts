@@ -147,6 +147,21 @@ export function createCrescentBay(time:{value:number},artAssets?:CoastalArtAsset
     const shoreAngle=Math.atan2(fp.getZ(i)-CRESCENT.cz,fp.getX(i)-CRESCENT.cx);
     c.lerp(sandColor,beachInfluence(shoreAngle)*smooth(h,-.20,.01));
     c.multiplyScalar(.94+.06*Math.sin(fp.getX(i)*19+fp.getZ(i)*14));
+    // Horizontal bedding, baked into the vertex colour rather than the shader.
+    // Doing it in the terrain's fragment stage changed the colour of the water:
+    // the sea samples the seabed, so anything applied to the shore material
+    // leaks into the lagoon. Courses at a wandering height, a dark joint where
+    // two of them meet, and a small tonal shift from bed to bed.
+    {
+      const wobble=Math.sin(fp.getX(i)*2.7+fp.getZ(i)*3.3)*.016+Math.sin(fp.getZ(i)*6.1-fp.getX(i)*4.9)*.008;
+      const cyc=(h+wobble)*15;
+      const edge=Math.abs((cyc-Math.floor(cyc))-.5);
+      const joint=1-smooth(edge,.33,.5);
+      const raw=Math.sin(Math.floor(cyc)*12.9898+3.7)*43758.5453;
+      const bed=((raw%1)+1)%1-.5;
+      const face=1-smooth(n,.34,.86);
+      c.multiplyScalar(1-face*(joint*.30+bed*.14));
+    }
     // Cheap baked ambient occlusion from the grid itself: a vertex sitting
     // below its four neighbours is in a fold, and folds are what makes a cliff
     // read as rock instead of a smooth wall. No extra height samples needed.
@@ -164,7 +179,7 @@ export function createCrescentBay(time:{value:number},artAssets?:CoastalArtAsset
   const solidTerrain=closeTerrainVolume(floor,HARBOR.bottom+.10);floor.dispose();
   const landscape=mesh(solidTerrain,terrainMaterial);landscape.name='CrescentShore';
   // Shore boulders along both island edges, skipping the open channel.
-  for(let i=0;i<(artAssets?32:120);i++){
+  for(let i=0;i<(artAssets?60:120);i++){
     const a=(random()*2-1)*Math.PI*.94,s=random()<.5?CRESCENT.rIn-.10-random()*.10:CRESCENT.rOut+.06+random()*.12;
     const [x,,z]=polar(a,s);
     if(Math.abs(Math.atan2(Math.sin(a-CRESCENT.openAt),Math.cos(a-CRESCENT.openAt)))<.7)continue;
@@ -190,9 +205,9 @@ export function createCrescentBay(time:{value:number},artAssets?:CoastalArtAsset
     add('pebbles',rocks[Math.floor(random()*3)],m.stone,{position:[x,h+s*.3,z],scale:[s*1.3,s*.6,s],rotation:[0,random()*6,0],color:random()>.5?'#e8dec6':'#c1bba7'},false);
   }
   // Layered cliff outcrops break the mathematically smooth island silhouette.
-  for(let i=0;i<(artAssets?35:310);i++){
+  for(let i=0;i<(artAssets?95:310);i++){
     const a=random()*Math.PI*2,wrap=Math.abs(Math.atan2(Math.sin(a-CRESCENT.openAt),Math.cos(a-CRESCENT.openAt)));
-    if(wrap<.88)continue;
+    if(wrap<1.02)continue;
     const r=.83+random()*.34,[x,,z]=polar(a,r),y=crescentHeight(x,z);
     if(y<HARBOR.water-.06)continue;
     const s=.035+random()*.075;
@@ -613,5 +628,5 @@ export function createCrescentBay(time:{value:number},artAssets?:CoastalArtAsset
   }
   const disposeArt=artAssets?addCoastalArt(root,artAssets,crescentHeight):undefined;
   root.updateMatrixWorld(true);
-  return {root,boat,fish,fishActors,beacon,beamMaterial,setBeamStrength,searchLight,footprint:bayFootprint(),lanternMaterial,lanternLight,haloMaterial,windowMaterial,windowMaterials,windowLights,dispose(){disposeArt?.();root.traverse(object=>{if(object instanceof THREE.InstancedMesh)object.dispose();});geometries.forEach(g=>g.dispose());palette.dispose();terrainMaterial.dispose();extraTextures.forEach(t=>t.dispose());hullMaterial.dispose();lanternMaterial.dispose();haloMaterial.dispose();haloTexture.dispose();windowMaterials.forEach(m=>m.dispose());beamMaterial.dispose();searchLight.dispose();}};
+  return {root,boat,fish,fishActors,beacon,beamMaterial,setBeamStrength,searchLight,lanternHalo:halo,footprint:bayFootprint(),lanternMaterial,lanternLight,haloMaterial,windowMaterial,windowMaterials,windowLights,dispose(){disposeArt?.();root.traverse(object=>{if(object instanceof THREE.InstancedMesh)object.dispose();});geometries.forEach(g=>g.dispose());palette.dispose();terrainMaterial.dispose();extraTextures.forEach(t=>t.dispose());hullMaterial.dispose();lanternMaterial.dispose();haloMaterial.dispose();haloTexture.dispose();windowMaterials.forEach(m=>m.dispose());beamMaterial.dispose();searchLight.dispose();}};
 }
