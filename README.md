@@ -51,6 +51,7 @@ React 19、TypeScript、Vite、Three.js、React Three Fiber、Drei 与后处理�
 | 位置 | 用途 |
 | --- | --- |
 | `src/App.tsx`、`src/style.css` | 展厅、相机、自动时刻切换 |
+| `DESIGN.md` | 界面设计系统：颜色语义、字号层级、组件规则与禁用项 |
 | `src/CrescentStudy.tsx`、`src/crescent-bay.ts` | 资产装配、地形与交互 |
 | `src/HarborWater.tsx`、`src/water-dynamics.ts` | 实时水面与波场 |
 | `src/beacon-light.ts`、`src/weather*` | 灯塔和天气 |
@@ -66,7 +67,7 @@ GitHub Pages 构建路径为 `/Keyscape/`；根域名部署保留 `VITE_BASE_PAT
 
 ## 验证与限制
 
-当前测试集有 32 项单元测试。本轮 Blender 美术和新交互见 [海岸迭代记录](docs/coastal-refinement-v29.md)。浏览器专项曾验证加载、船鱼运动、暂停、地形封闭和光束残影修复；最终版本尚未重跑完整浏览器回归或验收真实设备性能。软件渲染截图不能证明真机流畅度，构建仍有较大 3D 依赖体积提示。
+当前测试集有 53 项单元测试。本轮 Blender 美术和新交互见 [海岸迭代记录](docs/coastal-refinement-v29.md)。浏览器专项曾验证加载、船鱼运动、暂停、地形封闭和光束残影修复；最终版本尚未重跑完整浏览器回归或验收真实设备性能。软件渲染截图不能证明真机流畅度，构建仍有较大 3D 依赖体积提示。
 
 浏览器工具为可选依赖：安装 Playwright（`pnpm add -D playwright`）并运行 `pnpm exec playwright install chromium`。先启动开发服务，再运行 `pnpm verify`、`pnpm verify:motion`。可用 `PLAYWRIGHT_MODULE` 指向已有安装，`CHROME_PATH` 指定 Chrome。验收录屏脚本另需 FFmpeg。结果输出到未提交的 `outputs/`。
 

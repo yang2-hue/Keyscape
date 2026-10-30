@@ -16,11 +16,13 @@ import { OBSERVATORY_MOMENTS, observatorySurface, type ObservatoryMoment } from 
 export type World = 'coastal' | 'space' | 'observatory';
 
 /** The three keys in the exhibition. The label is also the switcher, so the
- * chrome stays at one line. */
-const WORKS: { id: World; label: string }[] = [
-  { id: 'coastal', label: 'C / COASTAL' },
-  { id: 'space', label: 'SPACE / LUNAR' },
-  { id: 'observatory', label: 'Q / OBSERVATORY' },
+ * chrome stays at one line. `index` states the size of the series — three keys,
+ * counted — which is the one piece of series metadata the app can honestly
+ * claim. */
+const WORKS: { id: World; label: string; index: string }[] = [
+  { id: 'coastal', label: 'C / COASTAL', index: '01' },
+  { id: 'space', label: 'SPACE / LUNAR', index: '02' },
+  { id: 'observatory', label: 'Q / OBSERVATORY', index: '03' },
 ];
 /** How much world each key needs in frame; the spacebar is longer and flatter,
  * so it can be shown larger without clipping. */
@@ -402,14 +404,18 @@ export default function App() {
 
     <footer className="gallery-footer">
       <div className="work-switch" role="group" aria-label="选择作品">
-        {WORKS.map(work => <button key={work.id} className="work-option" aria-pressed={work.id === world} onClick={() => pick(work.id)}>{work.label}</button>)}
+        {WORKS.map(work => <button key={work.id} className="work-option" aria-pressed={work.id === world} onClick={() => pick(work.id)}><span className="work-index" aria-hidden="true">{work.index}</span>{work.label}</button>)}
       </div>
       <div className="transport" role="group" aria-label="作品控制">
 
       {/* The exhibition runs on its own, so the frame has to say where in the
-          loop it is. The label reads it, the ticks count it. */}
+          loop it is. The title names the moment, the counter and the ticks both
+          count it — one in digits for reading, one as a rule for glancing. */}
       <div className="moment">
-        <span className="moment-label" aria-live="polite">{label}</span>
+        <div className="moment-head">
+          <span className="moment-label" aria-live="polite">{label}</span>
+          <span className="moment-index" aria-hidden="true">{String(step + 1).padStart(2, '0')} / {String(moments).padStart(2, '0')}</span>
+        </div>
         <ol className="moment-steps" aria-hidden="true">
           {Array.from({ length: moments }, (_, index) => <li key={index} className={index < step ? 'done' : index === step ? 'now' : ''}>
             {index === step ? <span key={`${step}:${run}`} className="moment-fill" /> : null}
