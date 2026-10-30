@@ -292,19 +292,22 @@ try {
   const after = await page.evaluate(() => window.__galleryCycle.state());
   check('the exhibition advances on its own', advanced && after.step !== before.step, { from: before.step, to: after.step, dwell: before.dwell });
 
-  // 7. Each preset reaches its fog density and background class.
+  // 7. Each preset reaches its fog density and background class. Morning rain
+  // carries no haze (see weather-model.ts: the grey veil was removed from the
+  // daylight preset on purpose), so the rain row targets zero, not a density.
   const presets = [
-    { index: 1, kind: 'rain', fog: 0.03, shot: 'weather-rain.png' },
+    { index: 1, kind: 'rain', fog: 0, shot: 'weather-rain.png' },
     { index: 3, kind: 'mist', fog: 0.075, shot: 'weather-mist.png' },
   ];
   const measured = {};
   for (const item of presets) {
     const state = await preset(page, item.index);
-    const reached = await waitFor(page, 'fogDensity', `Math.abs(v - ${item.fog}) < ${(item.fog * 0.12).toFixed(5)}`);
+    const tolerance = Math.max(item.fog * 0.12, 0.002);
+    const reached = await waitFor(page, 'fogDensity', `Math.abs(v - ${item.fog}) < ${tolerance.toFixed(5)}`);
     const d = await dataset(page);
     const background = await page.locator('main.gallery').getAttribute('class');
     measured[item.kind] = { fog: num(d, 'fogDensity'), night: d.night, className: background, state };
-    check(`${item.kind}: fog reaches the preset`, reached && background.includes(`weather-${item.kind}`), measured[item.kind]);
+    check(`${item.kind}: fog reaches the preset (${item.fog})`, reached && background.includes(`weather-${item.kind}`), measured[item.kind]);
     await page.screenshot({ path: path.join(OUT, item.shot) });
   }
   check('fog is thicker in the misty evening than in the rain', measured.mist.fog > measured.rain.fog, { rain: measured.rain.fog, mist: measured.mist.fog });
@@ -375,7 +378,9 @@ try {
     moment: document.querySelector('canvas')?.dataset.moment,
   }));
   check('the spacebar switches in as its own world', switched && lunar.world === 'space', lunar);
-  check('the lunar loop holds four moments of its own', lunar.ticks === 4 && lunar.moment === 'terminator', lunar);
+  // The lunar key carries five moments since the meteor shower joined the loop;
+  // the tick row counts the same list the cycle advances through.
+  check('the lunar loop holds five moments of its own', lunar.ticks === 5 && lunar.moment === 'terminator', lunar);
   check('the lunar moment is named on the transport', /月球/.test(lunar.label), lunar.label);
   await page.screenshot({ path: path.join(OUT, 'space-dawn.png') });
 
